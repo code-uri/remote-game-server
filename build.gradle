@@ -1,0 +1,63 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.5'
+}
+
+apply plugin: 'io.spring.dependency-management'
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    //implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.data:spring-data-redis'
+    implementation 'redis.clients:jedis:6.2.0'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-rest'
+    implementation 'org.springframework.boot:spring-boot-starter-json'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+    implementation('io.jsonwebtoken:jjwt-jackson:0.13.0')
+
+    implementation "org.javamoney:moneta:1.4.5"
+
+
+    implementation "in.aimlabs.gaming.engine:game-engine-api:$ENGINES_API_VERSION"
+    implementation "in.aimlabs.cloud:class-loaders:$JAR_CLASS_LOADER_VERSION"
+    implementation 'org.aspectj:aspectjrt'
+    implementation 'org.aspectj:aspectjweaver'
+
+    implementation "org.slf4j:slf4j-api"
+
+
+    compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    annotationProcessor "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    compileOnly "org.mapstruct:mapstruct:${MAPSTRUCT_VERSION}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:$MAPSTRUCT_VERSION"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+
+
+    compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    annotationProcessor "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    compileOnly "org.mapstruct:mapstruct:${MAPSTRUCT_VERSION}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:$MAPSTRUCT_VERSION"
+
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+
+}
+
+dependencies {
+}

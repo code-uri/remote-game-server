@@ -1,0 +1,48 @@
+erDiagram
+    NETWORK {
+        int id
+        string name
+    }
+    BRAND {
+        int id
+        string name
+    }
+    GAME {
+        int id
+        string title
+    }
+    BRANDGAME {
+        int id
+    }
+    GAMESESSION {
+        int id
+        datetime startTime
+        datetime endTime
+    }
+    PLAYER {
+        int id
+        string username
+    }
+    GAMEPLAY {
+        int id
+    }
+    GAMEACTIVITY {
+        int id
+    }
+    GAMEROUND {
+        int id
+    }
+    TRANSACTION {
+        int id
+        float amount
+    }
+
+    NETWORK ||--o{ BRAND : "has"
+    BRAND ||--o{ BRANDGAME : "has"
+    GAME ||--o{ BRANDGAME : "has"
+    GAMESESSION }o--|| GAME : "contains"
+    GAMESESSION }o--|| BRAND : "contains"
+    GAMESESSION }o--|| PLAYER : "contains"
+    GAMEROUND }o--|| GAMEPLAY : "contains"
+    GAMEPLAY ||--o{ GAMEACTIVITY : "has many"
+    GAMEROUND ||--o{ TRANSACTION : "has many"
