@@ -1,0 +1,34 @@
+[
+  {
+    "uid": "blackjack",
+    "baseUrl": "",
+    "deleted": false,
+    "tenant": "default",
+    "gameConfiguration": "blackjack",
+    "gameType": "TABLE"
+  },
+  {
+    "uid": "streak-blackjack",
+    "baseUrl": "",
+    "deleted": false,
+    "tenant": "default",
+    "gameConfiguration": "streak-blackjack",
+    "gameType": "TABLE"
+  },
+  {
+    "uid": "fruity-dice",
+    "baseUrl": "",
+    "deleted": false,
+    "tenant": "default",
+    "gameConfiguration": "carbon",
+    "gameType": "SLOTS"
+  },
+  {
+    "uid": "happy-hours",
+    "baseUrl": "",
+    "deleted": false,
+    "tenant": "default",
+    "gameConfiguration": "hydrogen",
+    "gameType": "SLOTS"
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "uid": "test-brand",
+    "network": "default",
+    "connectorUid": "mock-connector",
+    "deleted": false,
+    "tenant": "default",
+    "status": "ACTIVE",
+    "currency": "EUR",
+    "demoBalance": 1000.0
+  }
+]

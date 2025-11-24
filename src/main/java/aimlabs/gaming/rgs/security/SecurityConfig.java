@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
@@ -29,15 +30,13 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Configuration
+@Import(SecuredResourcesConfig.class)
 @EnableWebSecurity
 @Slf4j
 public class SecurityConfig {
@@ -57,13 +56,13 @@ public class SecurityConfig {
             "/authorize/**",
             "/favicon.ico",*/
     };
-
     @Autowired
     JWTClientProperties jjwt;
     @Autowired
     RoleService roleService;
     @Autowired
     CorsProperties corsProperties;
+
     @Autowired
     PermissionService permissionService;
 
@@ -91,6 +90,7 @@ public class SecurityConfig {
         return hierarchy;
     }
 
+
     @Bean
     JwtUtil jwtUtil(JWTClientProperties jjwt) {
         return new JwtUtil(jjwt.getClientId(), jjwt.getClientSecret());
@@ -102,14 +102,14 @@ public class SecurityConfig {
     }
 
     @Bean
-    AuthorizationManager<RequestAuthorizationContext> authorizationManager() {
+    RestEndpointAuthorizationManager authorizationManager() {
         return new RestEndpointAuthorizationManager();
     }
 
-    @Bean
-    SecuredEndpointRequestMatcher securedEndpointRequestMatcher() {
-        return new SecuredEndpointRequestMatcher(((RestEndpointAuthorizationManager) authorizationManager()).securedResources.stream().toList());
-    }
+   @Bean
+   SecuredEndpointRequestMatcher securedEndpointRequestMatcher(RestEndpointAuthorizationManager manager) {
+       return new SecuredEndpointRequestMatcher(manager.getSecuredResources().stream().toList());
+   }
 
     @Bean
     AuthenticationManager authenticationManager() {
@@ -221,7 +221,7 @@ public class SecurityConfig {
                             .requestMatchers("/admin/configurations",
                                     "/admin/configurations/*")
                             .authenticated()
-                            .requestMatchers(securedEndpointRequestMatcher())
+                            .requestMatchers(securedEndpointRequestMatcher(authorizationManager()))
                             .access(authorizationManager)
                             .anyRequest()
                             .authenticated())

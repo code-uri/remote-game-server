@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.javamoney.moneta.Money;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import javax.money.CurrencyUnit;
 import java.math.BigDecimal;
@@ -27,6 +28,7 @@ import java.util.Map;
 import static aimlabs.gaming.rgs.settings.GameSettingsService.isConfirmHandSupported;
 import static aimlabs.gaming.rgs.transactions.TransactionType.CREDIT;
 
+@Component
 public class WinHandler implements GameHandler{
 
     @Autowired

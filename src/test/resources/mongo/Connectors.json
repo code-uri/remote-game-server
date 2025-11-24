@@ -1,0 +1,10 @@
+[
+  {
+    "uid" : "mock-connector",
+    "baseUrl" : "http://localhost:8080/api/rgs/mock",
+    "parentConnector" : "generic-connector-v1",
+    "network" : "default",
+    "tenant": "default",
+    "deleted": false
+  }
+]

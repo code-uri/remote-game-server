@@ -1,6 +1,7 @@
 package aimlabs.gaming.rgs.security;
 
 import aimlabs.gaming.rgs.core.EntityController;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
+@Data
 @Slf4j
 public class RestEndpointAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext>, BeanPostProcessor {
 
@@ -80,8 +82,8 @@ public class RestEndpointAuthorizationManager implements AuthorizationManager<Re
         if (bean instanceof EntityController || securedEndpoint != null) {
             // RestController restController = AnnotationUtils.findAnnotation(bean.getClass(), RestController.class);
             var requestMapping = AnnotationUtils.findAnnotation(bean.getClass(), RequestMapping.class);
-            if (requestMapping != null || securedEndpoint != null) {
-                Arrays.asList(requestMapping.value()).stream().filter(path -> path.startsWith(ADMIN_API_PATH)).forEach(path -> {
+            if (requestMapping != null) {
+                Arrays.stream(requestMapping.value()).filter(path -> path.startsWith(ADMIN_API_PATH)).forEach(path -> {
                     log.info("Secured Resource {}", path);
                     securedResources.add(path);
                 });

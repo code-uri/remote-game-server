@@ -16,4 +16,9 @@ public class PermissionStore extends MongoEntityStore<PermissionDocument> {
                 .and("tenant").is(TenantContextHolder.getTenant()).and("userId").is(userId)), Permission.class, "Permissions");
     }
 
+    public long countByCreatedBy(String createdBy){
+        return getTemplate().count(Query.query(Criteria.where("deleted").is(false)
+                .and("createdBy").is(createdBy)), Permission.class, "Permissions");
+    }
+
 }

@@ -98,6 +98,7 @@ public class GameEngineApplicationContext {
 
         this.beanFactory = new DefaultListableBeanFactory(applicationContext.getAutowireCapableBeanFactory());
         bpp = new AutowiredAnnotationBeanPostProcessor();
+        this.beanFactory.addBeanPostProcessor(bpp);
         bpp.setBeanFactory(this.beanFactory);
         this.beanFactory.setAutowireCandidateResolver(new AutowireCandidateResolver() {
             
@@ -119,20 +120,6 @@ public class GameEngineApplicationContext {
         });
 
         engineVerified = true;
-        /*this.beanFactory.addBeanPostProcessor(new BeanPostProcessor() {
-            
-            public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-                if (AopUtils.isAopProxy(bean) && (AopProxyUtils.getSingletonTarget(bean)) instanceof GameEngineService || bean instanceof GameEngineService) {
-                    log.info("Before init: Found game engine {}", bean.getClass().getCanonicalName());
-                    GameEngineService<GameEngineRequest, GameEngineResponse> gameEngineService = ((GameEngineService<GameEngineRequest, GameEngineResponse>) bean);
-                    for (String gameConfiguration : gameEngineService.supportedGameConfigurations()) {
-                        rgsServiceDiscovery.addGameEngineModule(gameConfiguration, gameEngineService.getGameEngineModule());
-                        rgsServiceDiscovery.addEngineService(gameConfiguration, gameEngineService);
-                    }
-                }
-                return bean;
-            }
-        });*/
     }
 
     // Our method

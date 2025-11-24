@@ -25,7 +25,6 @@ import java.util.function.Predicate;
 
 @Slf4j
 @Data
-@Component
 public class GameSessionBearerTokenProvider implements AuthenticationConverter {
     private static final String BEARER = "Bearer ";
     private static final Predicate<String> matchBearerLength = authValue -> authValue.length() > BEARER.length();

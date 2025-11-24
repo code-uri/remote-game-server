@@ -1,0 +1,11 @@
+[
+  {
+    "uid": "default",
+    "name": "Default",
+    "clientId": "default",
+    "clientKey": "default",
+    "clientSecret": "default",
+    "tenant": "default",
+    "deleted": false
+  }
+]

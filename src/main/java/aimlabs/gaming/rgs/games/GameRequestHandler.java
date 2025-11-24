@@ -39,6 +39,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.util.Pair;
+import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.time.Duration;
@@ -52,6 +53,7 @@ import static aimlabs.gaming.rgs.settings.GameSettingsService.isLockingPlayerReq
 
 @Data
 @Slf4j
+@Component
 public class GameRequestHandler {
 
     @Autowired

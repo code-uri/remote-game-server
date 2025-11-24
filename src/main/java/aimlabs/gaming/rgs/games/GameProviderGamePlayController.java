@@ -10,17 +10,19 @@ import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.gamerounds.GameRound;
 import aimlabs.gaming.rgs.gamerounds.GameRoundService;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
+import aimlabs.gaming.rgs.gamesessions.GameSessionContext;
 import aimlabs.gaming.rgs.gamesessions.IGameSessionService;
 import aimlabs.gaming.rgs.gameskins.GameSkinService;
 import aimlabs.gaming.rgs.players.IPlayerService;
 import aimlabs.gaming.rgs.settings.GameSettingsService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.util.Pair;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -51,7 +53,7 @@ public class GameProviderGamePlayController {
     GameRoundService gameRoundService;
 
     @Autowired
-    ReactiveMongoTemplate reactiveMongoTemplate;
+    MongoTemplate mongoTemplate;
 
     @Value("${app.player.auth-header:Authorization}")
     private String authHeader;
@@ -83,17 +85,22 @@ public class GameProviderGamePlayController {
     public JsonNode playGame(
             GameSession gameSession,
             @RequestBody JsonNode request,
-            ServerHttpRequest serverHttpRequest) {
+            HttpServletRequest httpServletRequest) {
 
-        return gameRequestHandler.playGame(gameSession, request);
+       // java
+       return ScopedValue.where(
+               GameSessionContext.GAME_SESSION, gameSession
+       ).call(() -> gameRequestHandler.playGame(gameSession, request));
     }
 
     @GetMapping("/game-rounds/{uid}/confirm")
     public void confirmHand(GameSession gameSession,
                             @PathVariable(name = "uid") String uid,
-                            ServerHttpRequest serverHttpRequest) {
+                            HttpServletRequest httpServletRequest) {
 
-        GameRound gameRound = gameRoundService.confirmHand(uid);
+        GameRound gameRound = ScopedValue.where(
+                GameSessionContext.GAME_SESSION, gameSession
+        ).call(() -> gameRoundService.confirmHand(uid));
         if (gameRound == null || !gameRound.isHandConfirmed())
             throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Request failed!");
     }
@@ -103,25 +110,29 @@ public class GameProviderGamePlayController {
     public void ack(GameSession gameSession,
                     @RequestBody JsonNode request,
                     @PathVariable(name = "uid") String uid,
-                    ServerHttpRequest serverHttpRequest) {
+                    HttpServletRequest httpServletRequest) {
         //String ipaddress = getRemoteIPAddress(serverHttpRequest);
         long startMillis = System.currentTimeMillis();
         log.info("Received ack request for game-round: {} ", uid);
-        JsonNode response = gameRequestHandler
-                .ack(gameSession, uid, request);
+        JsonNode response = ScopedValue.where(
+                GameSessionContext.GAME_SESSION, gameSession
+        ).call(() -> gameRequestHandler
+                .ack(gameSession, uid, request));
+
     }
 
     @GetMapping("/settings")
     Map<String, Object> settings(GameSession gameSession, @RequestParam String brand, @RequestParam String game) {
 
-        return gameSettingsService.getBrandGameSettings(gameSession.getTenant(), brand, game);
-
+        return ScopedValue.where(
+                GameSessionContext.GAME_SESSION, gameSession
+        ).call(() -> gameSettingsService.getBrandGameSettings(gameSession.getTenant(), brand, game));
     }
 
 
     @PostMapping("/initialise")
     ResponseEntity<JsonNode> initialiseGame(@RequestBody() GameInitialiseRequest req,
-                                            ServerHttpRequest serverHttpRequest) {
+                                            HttpServletRequest httpServletRequest) {
         Pair<GameSession, JsonNode> pair = gameRequestHandler
                 .initialiseGame(req.getToken(), req.getBrand(), req.getGameId());
 
@@ -139,7 +150,7 @@ public class GameProviderGamePlayController {
                 @RequestParam(required = false, name = "gameId") String gameId,
                 @RequestParam(required = true, name = "page", defaultValue = "0") String pageStr,
                 @RequestParam(required = true, name = "size", defaultValue = "10") String sizeStr,
-                ServerHttpRequest serverHttpRequest) {
+                HttpServletRequest httpServletRequest) {
         long startTime = System.currentTimeMillis();
 
         // 'player' : ?0 ,'gameId':  ?1,  'status' :  'COMPLETED'
@@ -155,7 +166,9 @@ public class GameProviderGamePlayController {
         if (StringUtils.hasText(gameId))
             searchRequest.getProperties().put("gameId", gameId);
 
-        return gameRequestHandler.history(searchRequest);
+        return ScopedValue.where(
+                GameSessionContext.GAME_SESSION, gameSession
+        ).call(() -> gameRequestHandler.history(searchRequest));
     }
 
     @GetMapping("/game-rounds/{uid}/details")
@@ -174,13 +187,14 @@ public class GameProviderGamePlayController {
         return ResponseEntity.ok(response);
     }
 
-    private String getRemoteIPAddress(ServerHttpRequest request) {
-        String remoteAddress = request.getHeaders().getFirst("X-Forwarded-For");
-        if (remoteAddress == null)
-            return request.getRemoteAddress().getAddress().getHostAddress();
-        if (remoteAddress.contains(","))
+    private String getRemoteIPAddress(HttpServletRequest request) {
+        String remoteAddress = request.getHeader("X-Forwarded-For");
+        if (remoteAddress == null) {
+            return request.getRemoteAddr();
+        }
+        if (remoteAddress.contains(",")) {
             return remoteAddress.split(",")[0];
-
+        }
         return remoteAddress;
     }
 }

@@ -2,11 +2,13 @@
 package aimlabs.gaming.rgs.currency;
 
 import aimlabs.gaming.rgs.core.AbstractEntityService;
+import aimlabs.gaming.rgs.games.TenantContextHolder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.javamoney.moneta.CurrencyUnitBuilder;
 import org.javamoney.moneta.spi.ConfigurableCurrencyUnitProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
@@ -20,6 +22,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Data
@@ -30,6 +33,10 @@ public class CurrencyServiceImpl extends AbstractEntityService<Currency, Currenc
     CurrenciesStore store;
     @Autowired
     CurrencyMapper mapper;
+
+    @Autowired
+    @Qualifier("tenants")
+    private Set<String> tenants;
 
     public List<String> getAllCurrencies() {
         return this.store.findAll(Sort.by(Sort.Order.asc("id"))).stream()
@@ -74,46 +81,48 @@ public class CurrencyServiceImpl extends AbstractEntityService<Currency, Currenc
         Collection<CurrencyUnit> allCurrencies = Monetary.getCurrencies(new String[0]);
         Map<String, CurrencyUnit> registered = allCurrencies.stream()
                 .collect(Collectors.toMap(CurrencyUnit::getCurrencyCode, cu -> cu));
-
-        Collection<CurrencyDocument> currencyDocuments = this.store.findAll(Sort.by(Order.asc("id")));
-
         Collection<CurrencyUnit> registerdCurrencies = Monetary.getCurrencies();
-        List<String> dbCurrencies = currencyDocuments.stream()
-                .map((CurrencyDocument currency) -> {
-                    Currency currencyDto = this.mapper.asDto(currency);
-                    if (!registered.containsKey(currency.getCode())) {
-                        registerDBCurrency(currencyDto);
-                    } else if (!Monetary.isCurrencyAvailable(currency.getCode(), new String[0])) {
-                        CurrencyUnit cu = registered.get(currency.getCode());
-                        List<Map.Entry<String, Object>> updatesAvailable = currency.getData().entrySet().stream()
-                                .filter((entry) -> cu.getContext().get(entry.getKey(), entry.getValue().getClass()) == null)
-                                .collect(Collectors.toList());
-                        if (currency.getFractionalDigits() != cu.getDefaultFractionDigits() || !updatesAvailable.isEmpty()) {
-                            registerCurrency(currencyDto, cu);
-                        }
-                    }
 
-                    return currency.getCode();
-                })
-                .toList();
+        for (String tenant : tenants) {
+            ScopedValue.where(TenantContextHolder.getScopedValue(), tenant).run(() -> {
+                Collection<CurrencyDocument> currencyDocuments = this.store.findAll(Sort.by(Order.asc("id")));
 
+                List<String> dbCurrencies = currencyDocuments.stream()
+                        .map(currency -> {
+                            Currency currencyDto = this.mapper.asDto(currency);
+                            if (!registered.containsKey(currency.getCode())) {
+                                registerDBCurrency(currencyDto);
+                            } else if (!Monetary.isCurrencyAvailable(currency.getCode(), new String[0])) {
+                                CurrencyUnit cu = registered.get(currency.getCode());
+                                List<Map.Entry<String, Object>> updatesAvailable = currency.getData().entrySet().stream()
+                                        .filter(entry -> cu.getContext().get(entry.getKey(), entry.getValue().getClass()) == null)
+                                        .collect(Collectors.toList());
+                                if (currency.getFractionalDigits() != cu.getDefaultFractionDigits() || !updatesAvailable.isEmpty()) {
+                                    registerCurrency(currencyDto, cu);
+                                }
+                            }
 
-        List<CurrencyDocument> newList = registerdCurrencies.stream().filter(currencyUnit ->
-                !dbCurrencies.contains(currencyUnit.getCurrencyCode())
-        ).map(currencyUnit -> {
+                            return currency.getCode();
+                        })
+                        .toList();
 
-            CurrencyDocument register = new CurrencyDocument();
-            register.setType("regular");
-            register.setCode(currencyUnit.getCurrencyCode());
-            register.setNumericCode(currencyUnit.getNumericCode());
-            register.setName(currencyUnit.getCurrencyCode());
-            register.setFractionalDigits(currencyUnit.getDefaultFractionDigits());
-            return register;
+                List<CurrencyDocument> newList = registerdCurrencies.stream()
+                        .filter(currencyUnit -> !dbCurrencies.contains(currencyUnit.getCurrencyCode()))
+                        .map(currencyUnit -> {
+                            CurrencyDocument register = new CurrencyDocument();
+                            register.setType("regular");
+                            register.setCode(currencyUnit.getCurrencyCode());
+                            register.setTenant(tenant);
+                            register.setNumericCode(currencyUnit.getNumericCode());
+                            register.setName(currencyUnit.getCurrencyCode());
+                            register.setFractionalDigits(currencyUnit.getDefaultFractionDigits());
+                            return register;
+                        })
+                        .toList();
 
-        }).toList();
-
-
-        this.store.saveAll(newList);
+                this.store.saveAll(newList);
+            });
+        }
     }
 
     private static void registerDBCurrency(Currency currency) {

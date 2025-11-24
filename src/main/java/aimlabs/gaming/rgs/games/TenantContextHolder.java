@@ -11,6 +11,12 @@ public class TenantContextHolder {
     private static final ScopedValue<String> TENANT = ScopedValue.newInstance();
 
     public static String getTenant() {
-        return TENANT.get();
+        if(TENANT.isBound())
+            return TENANT.get();
+        return "default";
+    }
+
+    public static ScopedValue<String> getScopedValue() {
+        return TENANT;
     }
 }

@@ -1,0 +1,34 @@
+[
+  {
+    "brand": "test-brand",
+    "network": "default",
+    "game": "fruity-dice",
+    "status": "ACTIVE",
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "brand": "test-brand",
+    "network": "default",
+    "game": "happy-hours",
+    "status": "ACTIVE",
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "brand": "test-brand",
+    "network": "default",
+    "game": "blackjack",
+    "status": "ACTIVE",
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "brand": "test-brand",
+    "network": "default",
+    "game": "streak-blackjack",
+    "status": "ACTIVE",
+    "deleted": false,
+    "tenant": "default"
+  }
+]

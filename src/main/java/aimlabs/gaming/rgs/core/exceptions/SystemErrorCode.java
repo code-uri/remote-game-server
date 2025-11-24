@@ -7,6 +7,7 @@ public enum SystemErrorCode implements ErrorCode {
     INVALID_BRAND("invalid.brand", "Invalid brand", 400),
     INVALID_GAME("invalid.game", "Invalid game", 400),
     INVALID_REQUEST("invalid.request", "Invalid request", 400),
+    COM_ERROR("communication.error", "Communication Error", 500),
     INVALID_TOKEN("invalid.token", "Invalid brand", 400),
     TOKEN_EXPIRED("token.expired", "Token expired", 400),
     CURRENCY_NOT_SUPPORTED("currency.not.supported","Currency not supported" , 400 ),
@@ -33,7 +34,8 @@ public enum SystemErrorCode implements ErrorCode {
     FREE_SPINS_ALREADY_CLAIMED("freespins.already.claimed","Free spins already claimed", 400),
     FREE_SPINS_CLAIM_ROLLBACK_FAILED("freespins.claim.rollback.failed","freespins claim rollback failed", 500),
     INVALID_CLIENT_ID("invalid.clientId","invalid clientId", 400),
-    RETRY_REQUEST("retry.request", "Retry request", 400);
+    RETRY_REQUEST("retry.request", "Retry request", 400),
+    CONNECTOR_NOT_FOUND("connector.not.found", "Connector not found!", 400);
 
     String code;
     String description;

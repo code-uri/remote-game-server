@@ -1,8 +1,6 @@
 package aimlabs.gaming.rgs.permissions;
 
 import aimlabs.gaming.rgs.core.AbstractEntityService;
-import aimlabs.gaming.rgs.core.dto.SearchRequest;
-import aimlabs.gaming.rgs.core.dto.SearchResponse;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,7 +10,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -20,7 +17,6 @@ import java.util.Set;
 @Service
 @Slf4j
 public class PermissionService extends AbstractEntityService<Permission, PermissionDocument> {
-
 
     @Autowired
     private PermissionStore store;
@@ -40,55 +36,31 @@ public class PermissionService extends AbstractEntityService<Permission, Permiss
 
     @EventListener
     public void handleContextRefreshEvent(ContextRefreshedEvent contextStartedEvent) {
-        SearchRequest request = new SearchRequest();
-        request.getProperties().put("createdBy", "SYSTEM");
-        List<PermissionDocument> permissionDocuments = store.search(request).getItems();
-        if(permissionDocuments.isEmpty()){
-            List<PermissionDocument> insertPermissions = securedResources.stream().flatMap(p -> {
-
-                p = p.replace("/admin/", "");
-
-                List<PermissionDocument> permissionDocumentList = new ArrayList<>();
-                PermissionDocument read = new PermissionDocument();
-                read.setPermission("read:" + p);
-                read.setName("Read " + p);
-                read.setCreatedBy("SYSTEM");
-                read.setTenant("default");
-                read.setEntity(p);
-
-                PermissionDocument write = new PermissionDocument();
-                write.setPermission("write:" + p);
-                write.setName("Write " + p);
-                write.setCreatedBy("SYSTEM");
-                write.setTenant("default");
-                write.setEntity(p);
-
-                PermissionDocument delete = new PermissionDocument();
-                delete.setPermission("delete:" + p);
-                delete.setName("Delete " + p);
-                delete.setCreatedBy("SYSTEM");
-                delete.setTenant("default");
-                delete.setEntity(p);
-
-                PermissionDocument list = new PermissionDocument();
-                list.setPermission("list:" + p);
-                list.setName("List " + p);
-                list.setCreatedBy("SYSTEM");
-                list.setTenant("default");
-                list.setEntity(p);
-
-
-                permissionDocumentList.add(read);
-                permissionDocumentList.add(write);
-                permissionDocumentList.add(delete);
-                permissionDocumentList.add(list);
-
-                return permissionDocumentList.stream();
-            }).toList();
-
-             store.saveAll(insertPermissions);
+        if (store.countByCreatedBy("SYSTEM") == 0) {
+            log.info("No SYSTEM permissions found. Seeding permissions for tenants: {}", tenants);
+            List<PermissionDocument> permissionsToInsert = new ArrayList<>();
+            for (String tenant : tenants) {
+                for (String resource : securedResources) {
+                    String cleanResource = resource.replace("/admin/", "");
+                    permissionsToInsert.add(createPermission(tenant, cleanResource, "read"));
+                    permissionsToInsert.add(createPermission(tenant, cleanResource, "write"));
+                    permissionsToInsert.add(createPermission(tenant, cleanResource, "delete"));
+                    permissionsToInsert.add(createPermission(tenant, cleanResource, "list"));
+                }
+            }
+            store.saveAll(permissionsToInsert);
+            log.info("Seeded {} SYSTEM permissions.", permissionsToInsert.size());
         }
+    }
 
+    private PermissionDocument createPermission(String tenant, String resource, String action) {
+        PermissionDocument permission = new PermissionDocument();
+        permission.setPermission(action + ":" + resource);
+        permission.setName(action.substring(0, 1).toUpperCase() + action.substring(1) + " " + resource);
+        permission.setCreatedBy("SYSTEM");
+        permission.setTenant(tenant);
+        permission.setEntity(resource);
+        return permission;
     }
 
     public List<Permission> findByUserId(String userId) {

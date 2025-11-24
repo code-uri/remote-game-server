@@ -14,12 +14,15 @@ import in.aimlabs.gaming.engine.api.service.GameEngine;
 import in.aimlabs.gaming.engine.api.symbol.Symbol;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+
 @Slf4j
+@Service
 public class GameEngineServiceAdaptor {
 
 

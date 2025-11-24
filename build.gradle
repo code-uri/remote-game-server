@@ -29,6 +29,8 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
     implementation('io.jsonwebtoken:jjwt-jackson:0.13.0')
 
+
+    implementation "in.aimlabs:rng:$RNG_VERSION"
     implementation "org.javamoney:moneta:1.4.5"
 
 
@@ -38,6 +40,7 @@ dependencies {
     implementation 'org.aspectj:aspectjweaver'
 
     implementation "org.slf4j:slf4j-api"
+    implementation "org.zalando:jackson-datatype-money:${JACKSON_DATA_TYPE_MONEY_VERSION}"
 
 
     compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
@@ -56,6 +59,12 @@ dependencies {
 
     testImplementation('org.junit.jupiter:junit-jupiter')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+
+
+        testImplementation("org.testcontainers:testcontainers:1.20.3")
+        testImplementation("org.testcontainers:junit-jupiter:1.20.3")
+        testImplementation("org.testcontainers:mongodb:1.20.3")
+
 
 }
 

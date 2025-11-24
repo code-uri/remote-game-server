@@ -334,7 +334,7 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
 //            gameRound = promotionService.findOne(txn.getFreeSpins().getCampaignUid())
 //                    .doOnNext(promotion -> {
 //                        txn.getFreeSpins().setCampaignUid(promotion.getPromotionRefId());
-//                    }).switchIfEmpty(Mono.error(new BaseRuntimeException(GameServerErrorCode.INVALID_REQUEST, "Promotion " + txn.getFreeSpins().getCampaignUid() + " not found ")))
+//                    }).switchIfEmpty(Mono.error(new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion " + txn.getFreeSpins().getCampaignUid() + " not found ")))
 
 
             gameRound = gameRoundService.createGameRound(txn.getGameRoundId(), gameSession, txn.getGameId(),

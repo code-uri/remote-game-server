@@ -264,14 +264,14 @@ public class GameRoundService extends AbstractEntityService<GameRound, GameRound
 //            if (throwable instanceof GameEngineException) {
 //                throw throwable;
 //            }
-////            else if(throwable instanceof BaseRuntimeException e && e.getErrorCode() == GameServerErrorCode.COM_ERROR){
+////            else if(throwable instanceof BaseRuntimeException e && e.getErrorCode() == SystemErrorCode.COM_ERROR){
 ////                return Mono.error(new BaseException(SystemErrorCode.SYSTEM_ERROR, throwable.getMessage()));
 ////            }
 //            else
         if(throwable instanceof BaseRuntimeException e && e.getErrorCode() == SystemErrorCode.GAME_ROUND_CANCELLED){
             throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, throwable.getMessage());
         }
-//            else if(throwable instanceof BaseRuntimeException e && e.getErrorCode() == GameServerErrorCode.COM_ERROR){
+//            else if(throwable instanceof BaseRuntimeException e && e.getErrorCode() == SystemErrorCode.COM_ERROR){
 //                return Mono.error(new BaseException(SystemErrorCode.SYSTEM_ERROR, throwable.getMessage()));
 //            }
         else {

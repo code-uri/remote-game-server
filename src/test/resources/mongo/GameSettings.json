@@ -1,0 +1,45 @@
+[
+  {
+    "brand": "test-brand",
+    "settings": [
+      "default-stakes"
+    ],
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "brand": "test-brand",
+    "game": "blackjack",
+    "settings": [
+      "default-stakes"
+    ],
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "brand": "test-brand",
+    "game": "streak-blackjack",
+    "settings": [
+      "default-stakes",
+      "streak-wagers"
+    ],
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "game": "fruity-dice",
+    "settings": [
+      "slots-10"
+    ],
+    "deleted": false,
+    "tenant": "default"
+  },
+  {
+    "game": "happy-hours",
+    "settings": [
+      "slots-25"
+    ],
+    "deleted": false,
+    "tenant": "default"
+  }
+]
