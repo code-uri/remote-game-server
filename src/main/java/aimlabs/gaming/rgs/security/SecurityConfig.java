@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authorization.AuthorizationManager;
@@ -26,6 +27,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.AuthenticationFilter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -118,11 +120,36 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain apiRGSFilterChain(HttpSecurity http) {
-        AuthenticationFilter authenticationFilter = new AuthenticationFilter(authenticationManager(),
-                bearerTokenProvider());
-        authenticationFilter.setRequestMatcher(request -> Arrays.stream(AUTH_WHITELIST)
-                .noneMatch(path -> request.getPathInfo().startsWith(path)
-                                   || request.getRequestURI().startsWith(path)));
+        
+
+         AuthenticationFilter authenticationFilter = new AuthenticationFilter(
+            authenticationManager(),
+            bearerTokenProvider()
+        );
+    
+        // Set the matcher to only apply authentication when Authorization header is present
+        // AND the path is not in the whitelist
+        authenticationFilter.setRequestMatcher(request -> {
+            String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+            if (authHeader == null || authHeader.isEmpty()) {
+                return false; // Skip authentication if no Authorization header
+            }
+            
+            // Check if path is in whitelist
+            String requestURI = request.getRequestURI();
+            AntPathMatcher pathMatcher = new AntPathMatcher();
+            boolean isWhitelisted = Arrays.stream(AUTH_WHITELIST)
+                    .anyMatch(pattern -> pathMatcher.match(pattern, requestURI));
+            
+            return !isWhitelisted; // Apply authentication if NOT whitelisted
+        });
+        
+        // Set success handler equivalent
+        authenticationFilter.setSuccessHandler((request, response, authentication) -> {
+            log.debug("Authentication successful for: {}", authentication.getName());
+            // Continue filter chain - Spring Security handles this automatically
+        });
+    
         try {
             return http
                     .securityMatcher("/**")
