@@ -1,6 +1,7 @@
 package com.example.gameserver.controller;
 
 import com.example.gameserver.model.Game;
+import com.example.gameserver.model.JoinGameResult;
 import com.example.gameserver.model.Player;
 import com.example.gameserver.service.GameService;
 import org.springframework.http.HttpStatus;
@@ -116,14 +117,21 @@ public class GameController {
     /**
      * Join a game as a player.
      * WebFlux equivalent: Mono<ResponseEntity<Player>> joinGame(String gameId, Player player)
+     * Returns 201 Created on success, 404 Not Found if game doesn't exist, 409 Conflict if game is full.
      */
     @PostMapping("/{gameId}/join")
     public ResponseEntity<Player> joinGame(@PathVariable String gameId, @RequestBody Player player) {
-        Player joinedPlayer = gameService.joinGame(gameId, player);
-        if (joinedPlayer != null) {
-            return ResponseEntity.status(HttpStatus.CREATED).body(joinedPlayer);
+        JoinGameResult result = gameService.joinGame(gameId, player);
+        switch (result.getStatus()) {
+            case SUCCESS:
+                return ResponseEntity.status(HttpStatus.CREATED).body(result.getPlayer());
+            case GAME_NOT_FOUND:
+                return ResponseEntity.notFound().build();
+            case GAME_FULL:
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            default:
+                return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.badRequest().build();
     }
 
     /**

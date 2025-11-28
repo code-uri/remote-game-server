@@ -1,6 +1,7 @@
 package com.example.gameserver.service;
 
 import com.example.gameserver.model.Game;
+import com.example.gameserver.model.JoinGameResult;
 import com.example.gameserver.model.Player;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,7 @@ public class GameService {
 
     private final Map<String, Game> games = new ConcurrentHashMap<>();
     private final Map<String, List<Player>> gamePlayers = new ConcurrentHashMap<>();
+    private final Object joinLock = new Object();
 
     public GameService() {
         // Initialize with sample games
@@ -72,25 +74,28 @@ public class GameService {
         return games.remove(id) != null;
     }
 
-    public Player joinGame(String gameId, Player player) {
-        Game game = games.get(gameId);
-        if (game == null) {
-            return null;
+    public JoinGameResult joinGame(String gameId, Player player) {
+        synchronized (joinLock) {
+            Game game = games.get(gameId);
+            if (game == null) {
+                return JoinGameResult.gameNotFound();
+            }
+            
+            if (game.getPlayerCount() >= game.getMaxPlayers()) {
+                return JoinGameResult.gameFull();
+            }
+            
+            String playerId = UUID.randomUUID().toString();
+            player.setId(playerId);
+            player.setStatus("CONNECTED");
+            player.setScore(0);
+            
+            List<Player> players = gamePlayers.computeIfAbsent(gameId, k -> new ArrayList<>());
+            players.add(player);
+            game.setPlayerCount(game.getPlayerCount() + 1);
+            
+            return JoinGameResult.success(player);
         }
-        
-        if (game.getPlayerCount() >= game.getMaxPlayers()) {
-            return null;
-        }
-        
-        String playerId = UUID.randomUUID().toString();
-        player.setId(playerId);
-        player.setStatus("CONNECTED");
-        player.setScore(0);
-        
-        gamePlayers.get(gameId).add(player);
-        game.setPlayerCount(game.getPlayerCount() + 1);
-        
-        return player;
     }
 
     public List<Player> getPlayersInGame(String gameId) {

@@ -2,6 +2,7 @@ package com.example.gameserver;
 
 import com.example.gameserver.controller.GameController;
 import com.example.gameserver.model.Game;
+import com.example.gameserver.model.JoinGameResult;
 import com.example.gameserver.model.Player;
 import com.example.gameserver.service.GameService;
 import org.junit.jupiter.api.BeforeEach;
@@ -110,13 +111,36 @@ class GameControllerTest {
 
     @Test
     void joinGame_shouldReturnPlayer() throws Exception {
-        when(gameService.joinGame(eq("game-1"), any(Player.class))).thenReturn(testPlayer);
+        when(gameService.joinGame(eq("game-1"), any(Player.class)))
+            .thenReturn(JoinGameResult.success(testPlayer));
 
         mockMvc.perform(post("/api/games/game-1/join")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"TestPlayer\"}"))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.name").value("TestPlayer"));
+    }
+
+    @Test
+    void joinGame_whenGameNotFound_shouldReturn404() throws Exception {
+        when(gameService.joinGame(eq("nonexistent"), any(Player.class)))
+            .thenReturn(JoinGameResult.gameNotFound());
+
+        mockMvc.perform(post("/api/games/nonexistent/join")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"TestPlayer\"}"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void joinGame_whenGameFull_shouldReturn409() throws Exception {
+        when(gameService.joinGame(eq("game-1"), any(Player.class)))
+            .thenReturn(JoinGameResult.gameFull());
+
+        mockMvc.perform(post("/api/games/game-1/join")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"TestPlayer\"}"))
+            .andExpect(status().isConflict());
     }
 
     @Test
