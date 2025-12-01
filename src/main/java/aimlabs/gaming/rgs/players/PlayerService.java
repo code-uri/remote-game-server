@@ -46,7 +46,11 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
 
     @Override
     public Player registerOrUpdate(Player player) {
-        return super.create(findPlayerByNetworkAndCorrelationId(player.getNetwork(), player.getCorrelationId()));
+        Player existingPlayer = findPlayerByNetworkAndCorrelationId(player.getNetwork(), player.getCorrelationId());
+        if(existingPlayer == null)
+            return super.create(player);
+        else
+            return super.update(existingPlayer);
     }
 
 
@@ -153,7 +157,7 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
             }
 
         } catch (Exception e) {
-            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "player initialise failed!", e);
+            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "player initialize failed!", e);
         }
 
         return playerInfo;

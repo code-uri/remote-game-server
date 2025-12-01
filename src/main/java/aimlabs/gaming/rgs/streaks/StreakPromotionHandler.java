@@ -209,8 +209,10 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
     public JsonNode loadData(GameSession gameSession, GameSkin gameSkin, Map<String, Object> settings) {
         StreakCounterDocument streakCounterDocument = streakCounterStore.findActiveStreak(gameSession.getGame(), gameSession.getPlayer(), gameSession.getCurrency());
 
+
         ObjectNode playerBag = objectMapper.createObjectNode();
-        playerBag.put("streak", streakCounterDocument.getStreak());
+        if(streakCounterDocument!=null)
+            playerBag.put("streak", streakCounterDocument.getStreak());
         return objectMapper.createObjectNode().set("playerBag", playerBag);
     }
 }

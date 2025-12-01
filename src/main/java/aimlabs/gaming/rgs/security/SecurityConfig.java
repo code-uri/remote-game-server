@@ -45,11 +45,11 @@ public class SecurityConfig {
 
     private static final String[] AUTH_WHITELIST = {
             "/admin/users/login",
-//            "/api/rgs/admin/users/login",
-//            "/api/rgs/admin/brand-gaming",
+//            "/admin/users/login",
+//            "/admin/brand-gaming",
             "/admin/brand-gaming",
             "/admin/users/refresh",
-//            "/api/rgs/admin/users/refresh",
+//            "/admin/users/refresh",
             "/admin/cache/**",
             "/authorize/**",
             "/favicon.ico"
@@ -119,79 +119,45 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain apiRGSFilterChain(HttpSecurity http) {
-        
-
-         AuthenticationFilter authenticationFilter = new AuthenticationFilter(
+    @Order(2)
+    SecurityFilterChain apiRGSFilterChain(HttpSecurity http) throws Exception {
+        AuthenticationFilter authenticationFilter = new AuthenticationFilter(
             authenticationManager(),
             bearerTokenProvider()
         );
     
         // Set the matcher to only apply authentication when Authorization header is present
-        // AND the path is not in the whitelist
         authenticationFilter.setRequestMatcher(request -> {
             String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-            if (authHeader == null || authHeader.isEmpty()) {
-                return false; // Skip authentication if no Authorization header
-            }
-            
-            // Check if path is in whitelist
-            String requestURI = request.getRequestURI();
-            AntPathMatcher pathMatcher = new AntPathMatcher();
-            boolean isWhitelisted = Arrays.stream(AUTH_WHITELIST)
-                    .anyMatch(pattern -> pathMatcher.match(pattern, requestURI));
-            
-            return !isWhitelisted; // Apply authentication if NOT whitelisted
+            // Skip authentication if no Authorization header
+            return authHeader != null && !authHeader.isEmpty();
         });
         
-        // Set success handler equivalent
+        // Set success handler
         authenticationFilter.setSuccessHandler((request, response, authentication) -> {
             log.debug("Authentication successful for: {}", authentication.getName());
-            // Continue filter chain - Spring Security handles this automatically
         });
     
-        try {
-            return http
-                    .securityMatcher("/**")
-                    .httpBasic(AbstractHttpConfigurer::disable)
-                    .csrf(AbstractHttpConfigurer::disable)
-                    .cors(cors -> configurationSource())
-                    .formLogin(AbstractHttpConfigurer::disable)
-                    .headers(headersConfigurer
-                            -> headersConfigurer
-                            .addHeaderWriter(new StaticHeadersWriter("Access-Control-Allow-Origin",
-                                    "*")))
-
-                    .addFilterAt(authenticationFilter, AuthenticationFilter.class)
-                    .authorizeHttpRequests(authorizeHttpRequests
-                            -> authorizeHttpRequests.requestMatchers("/**")
-                            .permitAll()
-                            .requestMatchers("/api/rgs/connect/**")
-                            .permitAll()
-                            .anyRequest()
-                            .authenticated())
-                    .build();
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return http
+                .securityMatcher("/**")
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> configurationSource())
+                .formLogin(AbstractHttpConfigurer::disable)
+                .headers(headersConfigurer
+                        -> headersConfigurer
+                        .addHeaderWriter(new StaticHeadersWriter("Access-Control-Allow-Origin",
+                                "*")))
+                .addFilterAt(authenticationFilter, AuthenticationFilter.class)
+                .authorizeHttpRequests(authorizeHttpRequests
+                        -> authorizeHttpRequests
+                        .requestMatchers("/connect/**").permitAll()
+                        .requestMatchers("/mock/**").permitAll()
+                        .anyRequest().permitAll())
+                .build();
     }
 
-    @Bean
-    SecurityFilterChain apiA8RFilterChain(HttpSecurity http) {
-        try {
-            return http
-                    .securityMatcher("/connect/**")
-                    .httpBasic(AbstractHttpConfigurer::disable)
-                    .csrf(AbstractHttpConfigurer::disable)
-                    .cors(cors -> configurationSource())
-                    .formLogin(AbstractHttpConfigurer::disable)
-                    .authorizeHttpRequests(authorizeHttpRequests -> authorizeHttpRequests.anyRequest().permitAll())
-                    .build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
+
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)

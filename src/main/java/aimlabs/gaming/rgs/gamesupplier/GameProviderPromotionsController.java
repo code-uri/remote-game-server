@@ -10,6 +10,7 @@ import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionRequest;
 import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionResponse;
 import aimlabs.gaming.rgs.promotions.Promotion;
 import aimlabs.gaming.rgs.promotions.PromotionService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.server.ServerHttpRequest;
@@ -31,7 +32,7 @@ public class GameProviderPromotionsController {
     public FreeSpinsPromotionResponse awardPromotion(@RequestBody FreeSpinsPromotionRequest freeSpinsPromotionRequest,
                                                      @RequestHeader("X-Client-ID") String clientId,
                                                      @RequestHeader("X-Client-Key") String clientKey,
-                                                     ServerHttpRequest serverHttpRequest) {
+                                                     HttpServletRequest httpServletRequest) {
 
         freeSpinsPromotionRequest.setClientId(clientId);
         freeSpinsPromotionRequest.setClientKey(clientKey);
@@ -43,7 +44,7 @@ public class GameProviderPromotionsController {
 
     @GetMapping("/promotions/{promotionRefId}")
     public FreeSpinsPromotionResponse getPromotion(@PathVariable String promotionRefId,
-                                                           ServerHttpRequest serverHttpRequest) {
+                                                           HttpServletRequest httpServletRequest) {
         Promotion promotion = promotionService.findByPromotionRefId(promotionRefId);
         if(promotion==null){
             throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion not found");
@@ -53,7 +54,7 @@ public class GameProviderPromotionsController {
 
     @DeleteMapping("/promotions/{promotionRefId}")
     public FreeSpinsPromotionResponse cancelPromotion(@PathVariable String promotionRefId,
-                                                         ServerHttpRequest serverHttpRequest) {
+                                                         HttpServletRequest httpServletRequest) {
 
         Promotion promotion = promotionService.findByPromotionRefId(promotionRefId);
         if(promotion==null)
@@ -66,7 +67,7 @@ public class GameProviderPromotionsController {
     @GetMapping("/promotions/{id}/claim")
     public FreeSpinsAllotment claimPromotion(@PathVariable(name = "id") String promotionId,
                                              GameSession gameSession,
-                                             ServerHttpRequest serverHttpRequest) {
+                                             HttpServletRequest httpServletRequest) {
         //String ipaddress = getRemoteIPAddress(serverHttpRequest);
         long startMillis = System.currentTimeMillis();
 

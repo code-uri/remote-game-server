@@ -110,6 +110,6 @@ public class BrandGameService extends AbstractEntityService<BrandGame, BrandGame
 
 
         AggregationResults<BrandGameAggregate> result = store.getTemplate().aggregate(Aggregation.newAggregation(queryGameProvidersAggregation), "BrandGames", BrandGameAggregate.class);
-        return result.getMappedResults().getFirst();
+        return !result.getMappedResults().isEmpty()? result.getMappedResults().getFirst():null;
     }
 }

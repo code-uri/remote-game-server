@@ -237,7 +237,7 @@ public class GameSettingsService
 
         Function<String, JsonNode> readFromDB = o -> (JsonNode) store.getSettings(tenant, brand, gameId)
                 .stream()
-                .flatMap(template -> {
+                .map(template -> {
                     SettingsTemplateDocument settingsTemplateDocument = settingsTemplateStore.findOneByUid(tenant, template);
                     return getObjectMapper().valueToTree(settingsTemplateDocument);
                 })

@@ -8,6 +8,7 @@ import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.gamesessions.IGameSessionService;
 import aimlabs.gaming.rgs.players.IPlayerService;
 import aimlabs.gaming.rgs.players.Player;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +41,7 @@ public class GameInitiateController {
 
     @PostMapping("/init-session")
     Map<String, String> init(@RequestBody GameSessionRequest sessionRequest,
-                             ServerHttpRequest serverHttpRequest) {
+                             HttpServletRequest httpServletRequest) {
 
         Brand brand = brandService.findOneByTenantAndBrand(TenantContextHolder.getTenant(),
                 sessionRequest.getBrand());
@@ -55,7 +56,7 @@ public class GameInitiateController {
                 sessionRequest.getCurrency());
         request.setNetwork(brand.getNetwork());
         request.setToken(sessionRequest.getToken());
-        request.setIpAddress(getRemoteIPAddress(serverHttpRequest));
+        request.setIpAddress(getRemoteIPAddress(httpServletRequest));
 
         Player player = playerService.registerOrUpdate(brand.getNetwork(), brand.getUid(), sessionRequest.getPlayerId(), List.of());
 
@@ -69,20 +70,20 @@ public class GameInitiateController {
         return map;
     }
 
-    private String getRemoteIPAddress(ServerHttpRequest request) {
-        String remoteAddress = request.getHeaders().getFirst("X-Forwarded-For");
+    private String getRemoteIPAddress(HttpServletRequest request) {
+        String remoteAddress = request.getHeader("X-Forwarded-For");
         if (remoteAddress == null)
-            return request.getRemoteAddress().getAddress().getHostAddress();
+            return request.getRemoteAddr();
         if (remoteAddress.contains(","))
             return remoteAddress.split(",")[0];
 
         return remoteAddress;
     }
 
-    private String getTenant(ServerHttpRequest request) {
-        String remoteHost = request.getHeaders().getFirst("X-Forwarded-Host");
+    private String getTenant(HttpServletRequest request) {
+        String remoteHost = request.getHeader("X-Forwarded-Host");
         if (remoteHost == null)
-            return request.getRemoteAddress().getAddress().getHostName();
+            return request.getRemoteHost();
         if (remoteHost.contains(","))
             return remoteHost.split(",")[0];
 

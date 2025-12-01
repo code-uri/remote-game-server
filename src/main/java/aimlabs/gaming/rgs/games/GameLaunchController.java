@@ -6,12 +6,12 @@ import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.gameoperators.GameReplayRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -39,10 +39,13 @@ public class GameLaunchController {
     public ResponseEntity<?> launchGame(@PathVariable(value = "token", required = true) String token,
                                               @RequestParam(value = "gameId", required = true) String gameId,
                                               @RequestParam(value = "brand", required = true) String brand,
-                                              ServerHttpRequest request, @RequestHeader(value = "User-Agent", required = false)
+                                              HttpServletRequest request, @RequestHeader(value = "User-Agent", required = false)
                                               String userAgent) {
 
-        Map<String, String> queryParams = new HashMap<>(request.getQueryParams().toSingleValueMap());
+        Map<String, String> queryParams = new HashMap<>();
+        request.getParameterMap().forEach((key, values) -> {
+            if (values.length > 0) queryParams.put(key, values[0]);
+        });
         queryParams.put("token", token);
 
         String partner = brand;
@@ -122,7 +125,7 @@ public class GameLaunchController {
     }
 
     @GetMapping("/replay/initialise")
-    ResponseEntity<JsonNode> initialiseGame(@RequestParam String roundId, ServerHttpRequest serverHttpRequest) {
+    ResponseEntity<JsonNode> initialiseGame(@RequestParam String roundId, HttpServletRequest httpServletRequest) {
 
         long startMillis = System.currentTimeMillis();
         JsonNode response = gameRequestHandler
@@ -131,10 +134,10 @@ public class GameLaunchController {
                 .body(response);
     }
 
-    private String getRemoteIPAddress(ServerHttpRequest request) {
-        String remoteAddress = request.getHeaders().getFirst("X-Forwarded-For");
+    private String getRemoteIPAddress(HttpServletRequest request) {
+        String remoteAddress = request.getHeader("X-Forwarded-For");
         if (remoteAddress == null)
-            return request.getRemoteAddress().getAddress().getHostAddress();
+            return request.getRemoteAddr();
         if (remoteAddress.contains(","))
             return remoteAddress.split(",")[0];
 
@@ -142,8 +145,8 @@ public class GameLaunchController {
     }
 
 
-    private Optional<String> getRefererHeader(ServerHttpRequest request) {
-        return Optional.ofNullable(request.getHeaders().getFirst("Referer"));
+    private Optional<String> getRefererHeader(HttpServletRequest request) {
+        return Optional.ofNullable(request.getHeader("Referer"));
     }
 
 }

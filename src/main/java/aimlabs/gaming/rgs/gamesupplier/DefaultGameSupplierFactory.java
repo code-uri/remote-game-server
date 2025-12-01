@@ -11,13 +11,18 @@ import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.gamerounds.GameRound;
 import aimlabs.gaming.rgs.gamerounds.IGameRoundService;
 import aimlabs.gaming.rgs.games.GameLaunchRequest;
+import aimlabs.gaming.rgs.games.GameSupplierServiceFactory;
+import aimlabs.gaming.rgs.games.TenantContextHolder;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
+import aimlabs.gaming.rgs.gamesessions.GameSessionContext;
 import aimlabs.gaming.rgs.gamesessions.IGameSessionService;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.players.IPlayerService;
 import aimlabs.gaming.rgs.players.Player;
 import aimlabs.gaming.rgs.players.PlayerInfo;
 import aimlabs.gaming.rgs.settings.GameSettingsService;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriUtils;
@@ -27,7 +32,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Service
-public class DefaultGameSupplierFactory implements GameSupplierFactory {
+@Slf4j
+public class DefaultGameSupplierFactory implements GameSupplierServiceFactory {
 
     @Autowired
     IGameSessionService gameSessionService;
@@ -48,6 +54,9 @@ public class DefaultGameSupplierFactory implements GameSupplierFactory {
 //    @Autowired
 //    IPromotionService promotionService;
 
+    DefaultGameSupplierFactory() {
+        log.info("DefaultGameSupplierFactory initialized");
+    }
 
     @Override
     public boolean supports(Connector connector) {
@@ -66,37 +75,30 @@ public class DefaultGameSupplierFactory implements GameSupplierFactory {
         @Override
         public URI launchGame(GameLaunchRequest glr) {
 
-            Player player = new Player();
-            player.setNetwork(glr.getNetwork());
-            player.setBrand(glr.getBrand());
-            player.setCorrelationId(glr.getPlayer());
-
-            PlayerInfo playerInfo = playerService.initialise(player.getNetwork(),
+            PlayerInfo playerInfo = playerService.initialise(glr.getNetwork(),
                     glr.getToken(),
-                    player.getCorrelationId(),
+                    null,
                     glr.getCurrency(),
-                    player.getBrand(),
+                    glr.getBrand(),
                     glr.getGameId(),
                     true);
 
-            BrandGameAggregate brandGameAggregate = brandGameService.findOneByNetworkAndBrandAndGameId(null, glr.getBrand(), glr.getGameId());
+            BrandGameAggregate brandGameAggregate = brandGameService.findOneByNetworkAndBrandAndGameId(glr.getNetwork(), glr.getBrand(), glr.getGameId());
+            Brand brand = brandGameAggregate.brand();    
+            GameSkin game = brandGameAggregate.game();    
 
-
-            //TODO fix tenant
-            Map<String, Object> settings = gameSettingsService.findGameSettingsForCurrency("",
-                    glr.getBrand(),
-                    glr.getGameId(),
+            Map<String, Object> settings = gameSettingsService.findGameSettingsForCurrency(game.getTenant(),
+                    brand.getUid(),
+                    game.getUid(),
                     playerInfo.getWallet().getCurrency());
 
             Boolean unfinishedGameExists = gameRoundService.isUnfinishedGameRoundExists(playerInfo.getUid(), glr.getGameId());
-
 
             if (!unfinishedGameExists && brandGameAggregate.status() == Status.INACTIVE) {
                 throw new BaseRuntimeException(SystemErrorCode.INACTIVE_GAME);
             }
 
             String gc = (String) settings.getOrDefault("gameConfiguration", brandGameAggregate.game().getGameConfiguration());
-
 
             GameSession gameSession = gameSessionService.findOneByToken(glr.getToken());
 
@@ -114,10 +116,9 @@ public class DefaultGameSupplierFactory implements GameSupplierFactory {
                         , "gameConfiguration", brandGameAggregate.game().getGameConfiguration()));
             }
 
-
             //glr.setGameId(gameSkin.getName());
 
-            return URI.create(brandGameAggregate.game().getUrl() +
+            return URI.create((brandGameAggregate.game().getUrl()==null?"http://localhost:8080/games/mr-roboto/index.html" :brandGameAggregate.game().getUrl())+
                               "?token=" + gameSession.getUid() +
                               "&brand=" + glr.getBrand() +
                               "&lang=" + glr.getLanguage() +
