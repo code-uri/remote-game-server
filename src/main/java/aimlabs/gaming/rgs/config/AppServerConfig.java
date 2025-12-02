@@ -25,11 +25,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.server.WebExceptionHandler;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.zalando.jackson.datatype.money.MoneyModule;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -41,7 +44,7 @@ import static java.util.Arrays.asList;
 //@EnableConfigurationProperties(JWTClientProperties.class)
 @AutoConfigureBefore(JacksonAutoConfiguration.class)
 @Slf4j
-public class AppServerConfig {
+public class AppServerConfig implements WebMvcConfigurer{
 
 
     AppServerConfig(ObjectMapper objectMapper){
@@ -54,8 +57,6 @@ public class AppServerConfig {
         objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         objectMapper.disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL);
 
-
-
         objectMapper.registerModule(new MoneyModule());
     }
 
@@ -63,6 +64,11 @@ public class AppServerConfig {
     @Bean
     GameSessionArgumentResolver gameSessionArgumentResolver() {
         return new GameSessionArgumentResolver();
+    }
+
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(gameSessionArgumentResolver());
     }
 
 //    @Bean

@@ -42,7 +42,7 @@ public class JwtUtil {
         //This line will throw an exception if it is not a signed JWS (as expected)
 
         return Jwts.parser()
-                .decryptWith(Keys.hmacShaKeyFor(clientSecret.getBytes(StandardCharsets.UTF_8))) // Updated method
+                .verifyWith(Keys.hmacShaKeyFor(clientSecret.getBytes(StandardCharsets.UTF_8))) // Updated method
                 .build()
                 .parseSignedClaims(jwt)
                 .getPayload();

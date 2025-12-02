@@ -81,15 +81,17 @@ public class GameProviderGamePlayController {
 
 
     @PostMapping("/play")
-    public JsonNode playGame(
+    public ResponseEntity<JsonNode> playGame(
             GameSession gameSession,
             @RequestBody JsonNode request,
             HttpServletRequest httpServletRequest) {
 
-       // java
-       return ScopedValue.where(
+       return ResponseEntity.ok()
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+            .body( ScopedValue.where(
                GameSessionContext.GAME_SESSION, gameSession
-       ).call(() -> gameRequestHandler.playGame(gameSession, request));
+       ).call(() -> gameRequestHandler.playGame(gameSession, request)));
+        
     }
 
     @GetMapping("/game-rounds/{uid}/confirm")

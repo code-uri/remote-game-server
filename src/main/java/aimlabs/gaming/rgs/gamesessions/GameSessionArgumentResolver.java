@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.MethodParameter;
 import org.springframework.lang.Nullable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -34,12 +36,17 @@ public class GameSessionArgumentResolver implements HandlerMethodArgumentResolve
                                   NativeWebRequest webRequest,
                                   @Nullable WebDataBinderFactory binderFactory) {
 
-        Principal principal = webRequest.getUserPrincipal();
-        if (!(principal instanceof GameSessionAuthenticationToken token)) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null) {
+			return null;
+		}
+
+    ;
+        if (!(authentication instanceof GameSessionAuthenticationToken token)) {
             throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
         }
-
-        String sessionUid = (String) token.getPrincipal();
+        GameSessionAuthenticationToken authenticationToken = (GameSessionAuthenticationToken) authentication;
+        String sessionUid = (String) authenticationToken.getPrincipal();
         GameSession gameSession = gameSessionService.findOneByUid(sessionUid);
         if (gameSession == null) {
             throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);

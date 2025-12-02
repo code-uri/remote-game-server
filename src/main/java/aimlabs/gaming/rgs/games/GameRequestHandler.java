@@ -271,10 +271,12 @@ public class GameRequestHandler {
         gamePlayContext.setPlayer(player);
         gamePlayContext.setGameSession(gameSession);
         gamePlayContext.setGameSkin(brandGame.game());
+        gamePlayContext.setGamePlayRequest(requestJsonNode);
 
         gameFlowPipeline.handle(requestJsonNode, gamePlayContext);
 
-        return composeGameResponse(gamePlayContext.getEngineResponse());
+        JsonNode asd = composeGameResponse(gamePlayContext.getEngineResponse());
+        return asd;
     }
 
 

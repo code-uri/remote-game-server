@@ -98,7 +98,7 @@ public class GameEngineApplicationContext {
 
         this.beanFactory = new DefaultListableBeanFactory(applicationContext.getAutowireCapableBeanFactory());
         bpp = new AutowiredAnnotationBeanPostProcessor();
-        this.beanFactory.addBeanPostProcessor(bpp);
+        //this.beanFactory.addBeanPostProcessor(bpp);
         bpp.setBeanFactory(this.beanFactory);
         this.beanFactory.setAutowireCandidateResolver(new AutowireCandidateResolver() {
             

@@ -74,12 +74,17 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
                         if (register)
                             engineApplicationContext.start();
 
-                        log.info("Engine {} initialisation completed", artifactMetaData.getClass());
-                    }).findAny().ifPresentOrElse(artifactMetaData -> {
-                    }, () -> {
-                        log.warn("Found no engines to load! {}", rgsEngineProperties);
+                        log.info("Engine {} initialisation completed", artifactMetaData.getName());
+                    }).forEach(artifactMetaData -> {
+                        log.debug("Loaded engine: {}", artifactMetaData.getName());
                     });
+            
+            if (rgsServiceDiscovery.getGameEngineServices().isEmpty()) {
+                log.warn("Found no engines to load! {}", rgsEngineProperties);
+            }
         }
+        
+        directoryStream.close();
     }
 
 

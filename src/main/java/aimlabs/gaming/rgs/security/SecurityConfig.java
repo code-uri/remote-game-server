@@ -21,6 +21,7 @@ import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
@@ -132,14 +133,16 @@ public class SecurityConfig {
             // Skip authentication if no Authorization header
             return authHeader != null && !authHeader.isEmpty();
         });
-        
-        // Set success handler
+           // Set success handler to continue the filter chain
         authenticationFilter.setSuccessHandler((request, response, authentication) -> {
-            log.debug("Authentication successful for: {}", authentication.getName());
+            // Do nothing, just continue the filter chain
+            
         });
-    
         return http
                 .securityMatcher("/**")
+                .sessionManagement(session -> session
+                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> configurationSource())
@@ -166,6 +169,8 @@ public class SecurityConfig {
             AuthorizationManager<RequestAuthorizationContext> authorizationManager = authorizationManager();
             return http
                     .securityMatcher("/admin/**")
+                    .sessionManagement(session -> session
+                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .httpBasic(AbstractHttpConfigurer::disable)
                     .csrf(AbstractHttpConfigurer::disable)
                     .cors(cors -> configurationSource())

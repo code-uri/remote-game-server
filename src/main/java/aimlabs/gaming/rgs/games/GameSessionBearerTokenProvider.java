@@ -37,7 +37,6 @@ public class GameSessionBearerTokenProvider implements AuthenticationConverter {
 
     private SecretKey secretKey;
 
-
     public String createToken(GameSession session, String game) {
 
         if (session.getCurrency() == null)

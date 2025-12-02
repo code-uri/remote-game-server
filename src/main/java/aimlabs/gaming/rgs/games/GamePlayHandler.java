@@ -60,7 +60,9 @@ public class GamePlayHandler implements GameHandler{
     public void handle(JsonNode request, GamePlayContext gamePlayContext) {
 
 
-        Pair<JsonNode, Optional<GameRound>> gamePlayNodeAndGameRound = fetchGamePlayAndGameRound(gamePlayContext.getGameSession(), gamePlayContext.getGameSkin(), gamePlayContext.getGamePlayRequest(), gamePlayContext.getSettings());
+        Pair<JsonNode, Optional<GameRound>> gamePlayNodeAndGameRound = fetchGamePlayAndGameRound(gamePlayContext.getGameSession(),
+         gamePlayContext.getGameSkin(),
+          request, gamePlayContext.getSettings());
 
         logPlayerBagBeforeGamePlay(gamePlayNodeAndGameRound.getFirst());
         String gameActivityUid = UUID.randomUUID().toString();
@@ -79,7 +81,10 @@ public class GamePlayHandler implements GameHandler{
         this.nextHandler = nextHandler;
     }
 
-    private Pair<JsonNode, Optional<GameRound>> fetchGamePlayAndGameRound(GameSession gameSession, GameSkin gameSkin, JsonNode requestJsonNode, Map<String, Object> settings) {
+    private Pair<JsonNode, Optional<GameRound>> fetchGamePlayAndGameRound(GameSession gameSession,
+                                                                         GameSkin gameSkin,
+                                                                          JsonNode requestJsonNode,
+                                                                           Map<String, Object> settings) {
         boolean continueRound = requestJsonNode.has("gameRound");
         boolean continueGamePlay = requestJsonNode.has("gamePlay");
         Pair<JsonNode, Optional<GameRound>> gamePlayNodeAndGameRound = null;
