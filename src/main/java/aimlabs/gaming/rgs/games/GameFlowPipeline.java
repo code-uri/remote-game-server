@@ -1,33 +1,29 @@
 package aimlabs.gaming.rgs.games;
 
-import aimlabs.gaming.rgs.streaks.StreakPromotionHandler;
+import aimlabs.gaming.rgs.streaks.StreakPromotionGameFlowPipelineHandler;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import org.springframework.stereotype.Component;
 
 @Component
 @Data
-public class GameFlowPipeline implements GameHandler {
+public class GameFlowPipeline {
 
-    GameHandler first;
+    GameFlowPipelineHandler first;
 
-    GameFlowPipeline(GamePlayHandler gamePlayHandler,
-                     WagerHandler wagerHandler,
-                     WinHandler winHandler,
-                     StreakPromotionHandler streakPromotionHandler) {
+    GameFlowPipeline(GamePlayGameFlowPipelineHandler gamePlayHandler,
+            WagerGameFlowPipelineHandler wagerHandler,
+            WinGameFlowPipelineHandler winHandler,
+            StreakPromotionGameFlowPipelineHandler streakPromotionHandler) {
         this.first = gamePlayHandler;
         gamePlayHandler.setNext(streakPromotionHandler);
         streakPromotionHandler.setNext(wagerHandler);
         wagerHandler.setNext(winHandler);
     }
 
-    @Override
     public void handle(JsonNode request, GamePlayContext context) {
         getFirst().handle(request, context);
     }
 
-    @Override
-    public void setNext(GameHandler nextHandler) {
-
-    }
 }

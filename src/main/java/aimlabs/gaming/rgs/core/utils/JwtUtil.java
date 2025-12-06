@@ -1,6 +1,5 @@
 package aimlabs.gaming.rgs.core.utils;
 
-
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.Data;
@@ -17,8 +16,8 @@ import java.util.Optional;
 @Data
 public class JwtUtil {
 
-    private  String clientId;
-    private  String clientSecret;
+    private String clientId;
+    private String clientSecret;
 
     public JwtUtil(String clientId, String clientSecret) {
         this.clientId = clientId;
@@ -39,7 +38,7 @@ public class JwtUtil {
 
     public Claims decodeJWT(String jwt) {
         jwt = jwt.replace("Bearer ", "");
-        //This line will throw an exception if it is not a signed JWS (as expected)
+        // This line will throw an exception if it is not a signed JWS (as expected)
 
         return Jwts.parser()
                 .verifyWith(Keys.hmacShaKeyFor(clientSecret.getBytes(StandardCharsets.UTF_8))) // Updated method
@@ -48,13 +47,13 @@ public class JwtUtil {
                 .getPayload();
     }
 
-
     public <T> T getClaim(String token, String claimName, Class<T> requiredType) {
         return decodeJWT(token).get(claimName, requiredType);
     }
 
     public String getIdentityFromToken(String token) {
-        if (token == null || token.trim().equalsIgnoreCase("")) return null;
+        if (token == null || token.trim().equalsIgnoreCase(""))
+            return null;
         Claims claims = decodeJWT(token);
         String sub = claims.getSubject();
         String[] roles = Optional.of(claims.get("roles")).orElse("").toString().split("\\|");

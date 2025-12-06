@@ -28,7 +28,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.AuthenticationFilter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
-import org.springframework.util.AntPathMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -43,22 +42,6 @@ import java.util.stream.Collectors;
 @EnableWebSecurity
 @Slf4j
 public class SecurityConfig {
-
-    private static final String[] AUTH_WHITELIST = {
-            "/admin/users/login",
-//            "/admin/users/login",
-//            "/admin/brand-gaming",
-            "/admin/brand-gaming",
-            "/admin/users/refresh",
-//            "/admin/users/refresh",
-            "/admin/cache/**",
-            "/authorize/**",
-            "/favicon.ico"
-/*            "/resources/**",
-            "/webjars/**",
-            "/authorize/**",
-            "/favicon.ico",*/
-    };
     @Autowired
     JWTClientProperties jjwt;
     @Autowired
@@ -69,6 +52,7 @@ public class SecurityConfig {
     @Autowired
     PermissionService permissionService;
 
+    @SuppressWarnings("unused")
     private static Pattern initPattern(String patternValue) {
         String portList = null;
         Matcher matcher = Pattern.compile("(.*):\\[(\\*|\\d+(,\\d+)*)]").matcher(patternValue);
@@ -89,10 +73,10 @@ public class SecurityConfig {
     @Bean
     static RoleHierarchy roleHierarchy() {
         DefaultRoleHierarchy hierarchy = new DefaultRoleHierarchy();
-        hierarchy.setHierarchy("ROLE_SYSTEM > ROLE_SUPER_ADMIN \n ROLE_SUPER_ADMIN > ROLE_ADMIN \n ROLE_ADMIN > ROLE_STAFF");
+        hierarchy.setHierarchy(
+                "ROLE_SYSTEM > ROLE_SUPER_ADMIN \n ROLE_SUPER_ADMIN > ROLE_ADMIN \n ROLE_ADMIN > ROLE_STAFF");
         return hierarchy;
     }
-
 
     @Bean
     JwtUtil jwtUtil(JWTClientProperties jjwt) {
@@ -109,10 +93,10 @@ public class SecurityConfig {
         return new RestEndpointAuthorizationManager();
     }
 
-   @Bean
-   SecuredEndpointRequestMatcher securedEndpointRequestMatcher(RestEndpointAuthorizationManager manager) {
-       return new SecuredEndpointRequestMatcher(manager.getSecuredResources().stream().toList());
-   }
+    @Bean
+    SecuredEndpointRequestMatcher securedEndpointRequestMatcher(RestEndpointAuthorizationManager manager) {
+        return new SecuredEndpointRequestMatcher(manager.getSecuredResources().stream().toList());
+    }
 
     @Bean
     AuthenticationManager authenticationManager() {
@@ -123,44 +107,39 @@ public class SecurityConfig {
     @Order(2)
     SecurityFilterChain apiRGSFilterChain(HttpSecurity http) throws Exception {
         AuthenticationFilter authenticationFilter = new AuthenticationFilter(
-            authenticationManager(),
-            bearerTokenProvider()
-        );
-    
-        // Set the matcher to only apply authentication when Authorization header is present
+                authenticationManager(),
+                bearerTokenProvider());
+
+        // Set the matcher to only apply authentication when Authorization header is
+        // present
         authenticationFilter.setRequestMatcher(request -> {
             String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
             // Skip authentication if no Authorization header
             return authHeader != null && !authHeader.isEmpty();
         });
-           // Set success handler to continue the filter chain
+        // Set success handler to continue the filter chain
         authenticationFilter.setSuccessHandler((request, response, authentication) -> {
             // Do nothing, just continue the filter chain
-            
+
         });
         return http
                 .securityMatcher("/**")
                 .sessionManagement(session -> session
-                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> configurationSource())
                 .formLogin(AbstractHttpConfigurer::disable)
-                .headers(headersConfigurer
-                        -> headersConfigurer
+                .headers(headersConfigurer -> headersConfigurer
                         .addHeaderWriter(new StaticHeadersWriter("Access-Control-Allow-Origin",
                                 "*")))
                 .addFilterAt(authenticationFilter, AuthenticationFilter.class)
-                .authorizeHttpRequests(authorizeHttpRequests
-                        -> authorizeHttpRequests
+                .authorizeHttpRequests(authorizeHttpRequests -> authorizeHttpRequests
                         .requestMatchers("/connect/**").permitAll()
                         .requestMatchers("/mock/**").permitAll()
                         .anyRequest().permitAll())
                 .build();
     }
-
-
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -170,46 +149,45 @@ public class SecurityConfig {
             return http
                     .securityMatcher("/admin/**")
                     .sessionManagement(session -> session
-                    .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                            .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .httpBasic(AbstractHttpConfigurer::disable)
                     .csrf(AbstractHttpConfigurer::disable)
                     .cors(cors -> configurationSource())
                     .formLogin(AbstractHttpConfigurer::disable)
                     .addFilterAt(new AdminJWTAuthenticationWebFilter(authenticationManager(),
-                                    new GameSessionBearerTokenProvider(jwtUtil(jjwt)) {
+                            new GameSessionBearerTokenProvider(jwtUtil(jjwt)) {
 
-                                        public Authentication getAuthentication(String token) {
+                                public Authentication getAuthentication(String token) {
 
-                                            Claims claims = getJwtUtil().decodeJWT(token);
-                                            String sub = claims.get("sub", String.class);
-                                            String tenant = sub.split("\\|")[0];
-                                            String identity = sub.split("\\|")[1];
-                                            List<String> roles = List.of(claims.get("roles", String.class).split("\\|"));
+                                    Claims claims = getJwtUtil().decodeJWT(token);
+                                    String sub = claims.get("sub", String.class);
+                                    String tenant = sub.split("\\|")[0];
+                                    String identity = sub.split("\\|")[1];
+                                    List<String> roles = List.of(claims.get("roles", String.class).split("\\|"));
 
-                                            List<Role> roles1 = roleService.findAllByUidIn(roles);
-                                            List<String> permissions = roles1.stream().flatMap(role -> {
+                                    List<Role> roles1 = roleService.findAllByUidIn(roles);
+                                    List<String> permissions = roles1.stream().flatMap(role -> {
 
-                                                        return permissionService.findByUserId(identity).stream()
-                                                                .map(permission -> permission.getName());
-                                                    })
-                                                    .toList();
+                                        return permissionService.findByUserId(identity).stream()
+                                                .map(permission -> permission.getName());
+                                    })
+                                            .toList();
 
-
-                                            AdminUserAuthenticationToken authenticationToken =
-                                                    new AdminUserAuthenticationToken(
-                                                            new UserDetails(tenant, identity, roles), token);
-                                            Collection<SimpleGrantedAuthority> authorities = permissions.stream().map(SimpleGrantedAuthority::new)
-                                                    .collect(Collectors.toCollection(
-                                                            ArrayList<SimpleGrantedAuthority>::new));
-                                            authorities.addAll(roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList()));
-                                            authenticationToken.setAuthorities(authorities);
-                                            authenticationToken.setAuthenticated(true);
-                                            return authenticationToken;
-                                        }
-                                    }),
+                                    AdminUserAuthenticationToken authenticationToken = new AdminUserAuthenticationToken(
+                                            new UserDetails(tenant, identity, roles), token);
+                                    Collection<SimpleGrantedAuthority> authorities = permissions.stream()
+                                            .map(SimpleGrantedAuthority::new)
+                                            .collect(Collectors.toCollection(
+                                                    ArrayList<SimpleGrantedAuthority>::new));
+                                    authorities.addAll(roles.stream().map(SimpleGrantedAuthority::new)
+                                            .collect(Collectors.toList()));
+                                    authenticationToken.setAuthorities(authorities);
+                                    authenticationToken.setAuthenticated(true);
+                                    return authenticationToken;
+                                }
+                            }),
                             AuthenticationFilter.class)
-                    .authorizeHttpRequests(authorizeHttpRequests
-                            -> authorizeHttpRequests
+                    .authorizeHttpRequests(authorizeHttpRequests -> authorizeHttpRequests
                             .requestMatchers("/admin/forced-results",
                                     "/admin/users/login",
                                     "/admin/users/refresh",
@@ -246,7 +224,6 @@ public class SecurityConfig {
             configuration.setAllowedMethods(Arrays.asList(entry.getAllowedMethods().split(",")));
             configuration.setAllowedHeaders(Arrays.asList(entry.getAllowedHeaders().split(",")));
             configuration.setExposedHeaders(Arrays.asList(entry.getExposedHeaders().split(",")));
-
 
             log.info("allowed origins {} ", configuration.getAllowedOrigins());
             source.registerCorsConfiguration(entry.getPath(), configuration);

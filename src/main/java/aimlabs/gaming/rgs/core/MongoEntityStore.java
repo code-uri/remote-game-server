@@ -46,13 +46,16 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
         Type[] types = ObjectUtil.getActualTypeArguments(getClass());
         this.documentClass = (Class<E>) types[0];
 
-        org.springframework.data.mongodb.core.mapping.Document documentAnnotation = this.documentClass.getAnnotation(org.springframework.data.mongodb.core.mapping.Document.class);
+        org.springframework.data.mongodb.core.mapping.Document documentAnnotation = this.documentClass
+                .getAnnotation(org.springframework.data.mongodb.core.mapping.Document.class);
 
-        collection = documentAnnotation != null ? documentAnnotation.value() : documentClass.getSimpleName().toLowerCase().charAt(0) + documentClass.getSimpleName().substring(1);
+        collection = documentAnnotation != null ? documentAnnotation.value()
+                : documentClass.getSimpleName().toLowerCase().charAt(0) + documentClass.getSimpleName().substring(1);
         // Check if UID is enabled for this entity.
         try {
             Method uidMethod = this.documentClass.getMethod("getUid");
-            if (uidMethod != null) this.uidEnabled = true;
+            if (uidMethod != null)
+                this.uidEnabled = true;
         } catch (NoSuchMethodException e) {
             this.uidEnabled = false;
         }
@@ -88,7 +91,6 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
     public E update(E entity) {
         return afterUpdate(getTemplate().save(beforeUpdate(entity)));
     }
-
 
     @Override
     public E addTag(String key, String tag) {
@@ -212,7 +214,8 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
 
         Query query = new Query();
         List<Criteria> criteriaList = new ArrayList<>();
-        if (searchRequest.getQueryProperties() != null && !searchRequest.getQueryProperties().isEmpty() && searchRequest.getQ() != null) {
+        if (searchRequest.getQueryProperties() != null && !searchRequest.getQueryProperties().isEmpty()
+                && searchRequest.getQ() != null) {
             for (String prop : searchRequest.getQueryProperties()) {
                 criteriaList.add(Criteria.where(prop).regex(searchRequest.getQ(), "i"));
             }
@@ -261,18 +264,15 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
             query.addCriteria(Criteria
                     .where(searchRequest.getRangeProperty())
                     .gte(searchRequest.getFrom())
-                    .lt(searchRequest.getTo())
-            );
+                    .lt(searchRequest.getTo()));
         } else if (searchRequest.getFrom() != null) {
             query.addCriteria(Criteria
                     .where(searchRequest.getRangeProperty())
-                    .gte(searchRequest.getFrom())
-            );
+                    .gte(searchRequest.getFrom()));
         } else if (searchRequest.getTo() != null) {
             query.addCriteria(Criteria
                     .where(searchRequest.getRangeProperty())
-                    .lt(searchRequest.getTo())
-            );
+                    .lt(searchRequest.getTo()));
         }
 
         Criteria criteria = where("deleted").is(false);
@@ -300,7 +300,7 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
         update.set("tenant", TenantContextHolder.getTenant());
         return getTemplate()
                 .findAndModify(query(where("id").is(id)
-                                .and("tenant").is(TenantContextHolder.getTenant())),
+                        .and("tenant").is(TenantContextHolder.getTenant())),
                         update,
                         FindAndModifyOptions.options().returnNew(true),
                         documentClass);
@@ -314,7 +314,7 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
         update.set("tenant", TenantContextHolder.getTenant());
         E as = getTemplate()
                 .findAndModify(query(where("uid").is(uid)
-                                .and("tenant").is(TenantContextHolder.getTenant())), update,
+                        .and("tenant").is(TenantContextHolder.getTenant())), update,
                         FindAndModifyOptions.options().returnNew(true),
                         documentClass);
 
@@ -329,11 +329,10 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
         update.set("tenant", TenantContextHolder.getTenant());
         E e = getTemplate()
                 .findAndModify(query(where("uid").is(uid)
-                                .and("tenant").is(TenantContextHolder.getTenant())),
+                        .and("tenant").is(TenantContextHolder.getTenant())),
                         update,
                         FindAndModifyOptions.options().returnNew(true).upsert(upsert),
                         documentClass);
-
 
         return afterPartialUpdate(e, values, upsert);
     }
@@ -369,7 +368,8 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
     @Override
     public Collection<E> saveAll(List<E> entities) {
 
-        return getTemplate().insertAll(entities.stream().peek(e -> e.setTenant(TenantContextHolder.getTenant())).toList());
+        return getTemplate()
+                .insertAll(entities.stream().peek(e -> e.setTenant(TenantContextHolder.getTenant())).toList());
     }
 
     @Override
@@ -379,9 +379,10 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
         String displayOrderProperty = "displayOrder";
         List<UpdateOneModel<Document>> updates = new ArrayList<>();
         items.forEach(orderedItem -> {
-            //TODO: Deprecate in favor of using "key" property
+            // TODO: Deprecate in favor of using "key" property
             var filter = new Document(queryProperty, orderedItem.getKey());
-            UpdateOneModel<Document> update = new UpdateOneModel<Document>(filter, new Document("$set", new Document(Map.of(displayOrderProperty, orderedItem.getDisplayOrder()))));
+            UpdateOneModel<Document> update = new UpdateOneModel<Document>(filter,
+                    new Document("$set", new Document(Map.of(displayOrderProperty, orderedItem.getDisplayOrder()))));
             updates.add(update);
         });
 
@@ -402,11 +403,12 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
         Update update = new Update();
         update.set("modifiedOn", new Date());
         items.forEach(item -> {
-            update.set(property + ".$[uid" + item.getKey().replace("-", "") + "]." + displayOrderProperty, item.getDisplayOrder());
+            update.set(property + ".$[uid" + item.getKey().replace("-", "") + "]." + displayOrderProperty,
+                    item.getDisplayOrder());
             update.filterArray(where("uid" + item.getKey().replace("-", "") + ".uid").is(item.getKey()));
         });
 
-         getTemplate()
+        getTemplate()
                 .updateFirst(query, update, documentClass);
     }
 }

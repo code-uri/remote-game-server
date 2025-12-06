@@ -29,7 +29,7 @@ import static aimlabs.gaming.rgs.settings.GameSettingsService.isConfirmHandSuppo
 import static aimlabs.gaming.rgs.transactions.TransactionType.CREDIT;
 
 @Component
-public class WinHandler implements GameHandler{
+public class WinGameFlowPipelineHandler implements GameFlowPipelineHandler {
 
     @Autowired
     ICurrencyService currencyService;
@@ -41,13 +41,12 @@ public class WinHandler implements GameHandler{
     private TransactionService transactionService;
     @Autowired
     private IPlayerService playerService;
-    private GameHandler nextHandler;
-
+    private GameFlowPipelineHandler nextHandler;
 
     private void processGameRound(GamePlayResponse gamePlayResponse, GameSession gameSession,
-                                  GameSkin gameSkin,
-                                  Player player,
-                                  Map<String, Object> settingsJsonNode) {
+            GameSkin gameSkin,
+            Player player,
+            Map<String, Object> settingsJsonNode) {
 
         CurrencyUnit currencyUnit = currencyService.getCurrency(gameSession.getCurrency());
 
@@ -55,13 +54,13 @@ public class WinHandler implements GameHandler{
 
         GameRound gameRound = gamePlayResponse.getGameRound();
 
-        //        log.info("update game round  with status {}, isRoundCompleted {}", gameRound.getStatus(), gamePlayResponse.isRoundCompleted());
+        // log.info("update game round with status {}, isRoundCompleted {}",
+        // gameRound.getStatus(), gamePlayResponse.isRoundCompleted());
         // gameRound.setGamePlay(gamePlayResponse.getGamePlay().get("uid").asText());
 
-
-        //noinspection RedundantIfStatement
+        // noinspection RedundantIfStatement
         if (isConfirmHandSupported(settingsJsonNode))
-            gameRound.setHandConfirmed(false);//hand confirmation api with update this to true later.
+            gameRound.setHandConfirmed(false);// hand confirmation api with update this to true later.
         else
             gameRound.setHandConfirmed(true);
 
@@ -89,18 +88,22 @@ public class WinHandler implements GameHandler{
             credit = credit.add(Money.of(BigDecimal.valueOf(gamePlayResponse.getWinnings()),
                     currencyUnit));
         }
-//                    if (gameRound.getJackpotDetails() != null
-//                            && gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency() != null
-//                            && gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency().isPositive()) {
-//                        credit = credit.add(gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency());
-//                    }
-
+        // if (gameRound.getJackpotDetails() != null
+        // && gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency() !=
+        // null
+        // &&
+        // gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency().isPositive())
+        // {
+        // credit =
+        // credit.add(gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency());
+        // }
 
         try {
 
             Transaction transaction = null;
             if (credit.isPositive() || gamePlayResponse.isRoundCompleted()) {
-                transaction = processGameTransaction(gameSession, player, gameRound, gamePlayResponse.getGameActivityUid(), null, credit, CREDIT, null, null, null, false,
+                transaction = processGameTransaction(gameSession, player, gameRound,
+                        gamePlayResponse.getGameActivityUid(), null, credit, CREDIT, null, null, null, false,
                         gamePlayResponse.isRoundCompleted());
             }
             gameRound.setTotalWin(gameRound.getTotalWin().add(credit));
@@ -114,7 +117,6 @@ public class WinHandler implements GameHandler{
             if (playerWallet == null)
                 playerWallet = playerService.getBalance(gameSession, player.getCorrelationId());
 
-
             gameRound = gameRoundService.updatePartial(gameRound.getUid(), updateMap);
             updateGamePlayResponse(gamePlayResponse, gameRound, playerWallet);
         } catch (Exception e) {
@@ -125,22 +127,25 @@ public class WinHandler implements GameHandler{
     }
 
     public Transaction processGameTransaction(GameSession gameSession, Player player, GameRound gameRound,
-                                              String gameActivityUid, Money debit, Money credit,
-                                              TransactionType txnType, String extTxnId, String orgTxnId, Money orgTxnAmount,
-                                              boolean rollbackRequired, boolean gameRoundCompleted) {
-        return transactionService.processGameTransaction(player.getCorrelationId(), gameRound, gameActivityUid, gameSession,
+            String gameActivityUid, Money debit, Money credit,
+            TransactionType txnType, String extTxnId, String orgTxnId, Money orgTxnAmount,
+            boolean rollbackRequired, boolean gameRoundCompleted) {
+        return transactionService.processGameTransaction(player.getCorrelationId(), gameRound, gameActivityUid,
+                gameSession,
                 debit, credit, txnType, extTxnId, orgTxnId, orgTxnAmount, rollbackRequired, gameRoundCompleted);
     }
 
     private Status determineStatus(GamePlayResponse gamePlayResponse) {
-        return gamePlayResponse.isRoundCompleted() ? Status.COMPLETED : Status.valueOf(gamePlayResponse.getGamePlayStatus());
+        return gamePlayResponse.isRoundCompleted() ? Status.COMPLETED
+                : Status.valueOf(gamePlayResponse.getGamePlayStatus());
     }
 
     private void releaseGameRoundLock(GameRound gameRound) {
         gameRoundService.releaseLockOnGameRound(gameRound);
     }
 
-    private GamePlayResponse updateGamePlayResponse(GamePlayResponse gamePlayResponse, GameRound gameRound, PlayerWallet playerWallet) {
+    private GamePlayResponse updateGamePlayResponse(GamePlayResponse gamePlayResponse, GameRound gameRound,
+            PlayerWallet playerWallet) {
         gamePlayResponse.setGameRound(gameRound);
         gamePlayResponse.setPlayerWallet(playerWallet);
         return gamePlayResponse;
@@ -156,13 +161,12 @@ public class WinHandler implements GameHandler{
 
         processGameRound(gamePlayResponse, gameSession, gameSkin, player, settingsJsonNode);
 
-
         this.nextHandler.handle(request, gamePlayContext);
 
     }
 
     @Override
-    public void setNext(GameHandler nextHandler) {
+    public void setNext(GameFlowPipelineHandler nextHandler) {
         this.nextHandler = nextHandler;
     }
 }

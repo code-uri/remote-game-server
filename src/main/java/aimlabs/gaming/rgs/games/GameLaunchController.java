@@ -25,7 +25,6 @@ import java.util.Optional;
 @RequestMapping("/games")
 public class GameLaunchController {
 
-
     @Autowired
     GameRequestHandler gameRequestHandler;
 
@@ -37,14 +36,14 @@ public class GameLaunchController {
 
     @GetMapping(value = "/launch/{token}")
     public ResponseEntity<?> launchGame(@PathVariable(value = "token", required = true) String token,
-                                              @RequestParam(value = "gameId", required = true) String gameId,
-                                              @RequestParam(value = "brand", required = true) String brand,
-                                              HttpServletRequest request, @RequestHeader(value = "User-Agent", required = false)
-                                              String userAgent) {
+            @RequestParam(value = "gameId", required = true) String gameId,
+            @RequestParam(value = "brand", required = true) String brand,
+            HttpServletRequest request, @RequestHeader(value = "User-Agent", required = false) String userAgent) {
 
         Map<String, String> queryParams = new HashMap<>();
         request.getParameterMap().forEach((key, values) -> {
-            if (values.length > 0) queryParams.put(key, values[0]);
+            if (values.length > 0)
+                queryParams.put(key, values[0]);
         });
         queryParams.put("token", token);
 
@@ -57,7 +56,7 @@ public class GameLaunchController {
         URI uri = gameRequestHandler
                 .launchGame(launchRequest);
 
-        if(uri == null){
+        if (uri == null) {
             throw new BaseRuntimeException(SystemErrorCode.GAME_COMING_SOON);
         }
 
@@ -83,30 +82,28 @@ public class GameLaunchController {
         }
     }
 
-
     @GetMapping(value = "/replay/round")
     public ResponseEntity<URI> replay(@RequestParam String roundId,
 
-                                            //operator integration params
-                                            @RequestParam(name = "clientId", required = false) String clientId,
-                                            @RequestParam(name = "signature", required = false) String signature,
+            // operator integration params
+            @RequestParam(name = "clientId", required = false) String clientId,
+            @RequestParam(name = "signature", required = false) String signature,
 
-                                            //player game round request
-                                            @RequestHeader(name = "Authorization", required = false) String token
-                                           ) {
+            // player game round request
+            @RequestHeader(name = "Authorization", required = false) String token) {
 
         GameReplayRequest gameReplayRequest = new GameReplayRequest();
         gameReplayRequest.setGameRound(roundId);
 
-        if(token!=null ){
+        if (token != null) {
             Claims claims = tokenProvider.validateToken(token);
-            if(claims.get("roles")!=null){
-                //admin user with roles validate role permission for accessing the game round.
+            if (claims.get("roles") != null) {
+                // admin user with roles validate role permission for accessing the game round.
             }
 
-            if(claims.get("player")!=null) {
+            if (claims.get("player") != null) {
                 String player = claims.get("player", String.class);
-//            String gameId = claims.get("game", String.class);
+                // String gameId = claims.get("game", String.class);
                 gameReplayRequest.setPlayerId(player);
             }
         }
@@ -114,9 +111,8 @@ public class GameLaunchController {
         URI uri = gameRequestHandler
                 .gameReplay(gameReplayRequest);
 
-        if(uri==null)
+        if (uri == null)
             throw new BaseRuntimeException(SystemErrorCode.INVALID_GAME_ROUND);
-
 
         return ResponseEntity
                 .status(HttpStatus.FOUND)
@@ -127,7 +123,6 @@ public class GameLaunchController {
     @GetMapping("/replay/initialise")
     ResponseEntity<JsonNode> initialiseGame(@RequestParam String roundId, HttpServletRequest httpServletRequest) {
 
-        long startMillis = System.currentTimeMillis();
         JsonNode response = gameRequestHandler
                 .replayGameRoundInitialiseGame(roundId);
         return ResponseEntity.ok()
@@ -143,7 +138,6 @@ public class GameLaunchController {
 
         return remoteAddress;
     }
-
 
     private Optional<String> getRefererHeader(HttpServletRequest request) {
         return Optional.ofNullable(request.getHeader("Referer"));

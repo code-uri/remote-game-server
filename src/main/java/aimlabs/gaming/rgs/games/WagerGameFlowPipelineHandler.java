@@ -27,8 +27,8 @@ import static aimlabs.gaming.rgs.transactions.TransactionType.DEBIT;
 @Setter
 @Component
 @Slf4j
-public class WagerHandler implements GameHandler{
-    private GameHandler nextHandler;
+public class WagerGameFlowPipelineHandler implements GameFlowPipelineHandler {
+    private GameFlowPipelineHandler nextHandler;
 
     @Autowired
     private GameRoundService gameRoundService;
@@ -47,31 +47,30 @@ public class WagerHandler implements GameHandler{
         Map<String, Object> settingsJsonNode = gamePlayContext.getSettings();
 
         log.info("wager filter handing");
-        if(gamePlayResponse.isNewRound()) {
+        if (gamePlayResponse.isNewRound()) {
             handleNewRound(gamePlayResponse, gameSession, gameSkin, player, settingsJsonNode);
-        }else{
+        } else {
             handleExistingRound(gamePlayResponse, gameSession, player);
         }
     }
 
     @Override
-    public void setNext(GameHandler nextHandler) {
+    public void setNext(GameFlowPipelineHandler nextHandler) {
         this.nextHandler = nextHandler;
     }
 
-
     private void handleNewRound(GamePlayResponse gamePlayResponse,
-                                GameSession gameSession,
-                                GameSkin gameSkin,
-                                Player player,
-                                Map<String, Object> settingsJsonNode) {
+            GameSession gameSession,
+            GameSkin gameSkin,
+            Player player,
+            Map<String, Object> settingsJsonNode) {
         JsonNode gamePlay = gamePlayResponse.getGamePlay();
         String uid = gamePlay.get("uid").asText();
 
         BigDecimal wager = getWager(gamePlayResponse, gameSession, gameSkin.getUid());
 
-                    log.info("createGameRound wager {}", wager);
-                    Money totalWagerMoney = Money.of(wager.doubleValue(), gameSession.getCurrency());
+        log.info("createGameRound wager {}", wager);
+        Money totalWagerMoney = Money.of(wager.doubleValue(), gameSession.getCurrency());
         GameRound gameRound = gameRoundService.createGameRound(
                 gamePlayResponse.getGameRoundId(),
                 null,
@@ -84,8 +83,7 @@ public class WagerHandler implements GameHandler{
                 gamePlayResponse.getGameActivityUid(),
                 false,
                 gamePlayResponse,
-                isConfirmHandSupported(settingsJsonNode)
-        );
+                isConfirmHandSupported(settingsJsonNode));
 
         try {
 
@@ -104,7 +102,7 @@ public class WagerHandler implements GameHandler{
         }
     }
 
-    private  BigDecimal getWager(GamePlayResponse gamePlayResponse, GameSession gameSession, String gameId) {
+    private BigDecimal getWager(GamePlayResponse gamePlayResponse, GameSession gameSession, String gameId) {
         return BigDecimal.valueOf(gamePlayResponse.getTotalWager());
     }
 
@@ -113,7 +111,7 @@ public class WagerHandler implements GameHandler{
         if (additionalWager > 0) {
             CurrencyUnit currencyUnit = currencyService.getCurrency(gameSession.getCurrency());
 
-                        Money debit = Money.of(additionalWager, currencyUnit);
+            Money debit = Money.of(additionalWager, currencyUnit);
             Transaction transaction = transactionService.processGameTransaction(
                     player.getCorrelationId(),
                     gamePlayResponse.getGameRound(),
@@ -126,8 +124,7 @@ public class WagerHandler implements GameHandler{
                     null,
                     null,
                     false,
-                    gamePlayResponse.isRoundCompleted()
-            );
+                    gamePlayResponse.isRoundCompleted());
         }
     }
 }

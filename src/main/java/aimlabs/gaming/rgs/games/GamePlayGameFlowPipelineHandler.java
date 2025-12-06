@@ -34,9 +34,9 @@ import static aimlabs.gaming.rgs.settings.GameSettingsService.isReadPlayerBag;
 
 @Slf4j
 @Component
-public class GamePlayHandler implements GameHandler{
+public class GamePlayGameFlowPipelineHandler implements GameFlowPipelineHandler {
 
-    private GameHandler nextHandler;
+    private GameFlowPipelineHandler nextHandler;
 
     @Autowired
     RedisTemplate<String, Object> redisTemplate;
@@ -59,43 +59,47 @@ public class GamePlayHandler implements GameHandler{
     @Override
     public void handle(JsonNode request, GamePlayContext gamePlayContext) {
 
-
-        Pair<JsonNode, Optional<GameRound>> gamePlayNodeAndGameRound = fetchGamePlayAndGameRound(gamePlayContext.getGameSession(),
-         gamePlayContext.getGameSkin(),
-          request, gamePlayContext.getSettings());
+        Pair<JsonNode, Optional<GameRound>> gamePlayNodeAndGameRound = fetchGamePlayAndGameRound(
+                gamePlayContext.getGameSession(),
+                gamePlayContext.getGameSkin(),
+                request, gamePlayContext.getSettings());
 
         logPlayerBagBeforeGamePlay(gamePlayNodeAndGameRound.getFirst());
         String gameActivityUid = UUID.randomUUID().toString();
-        GamePlayResponse gamePlayResponse = gamePlayService.proceedGamePlay(gamePlayContext, gamePlayNodeAndGameRound.getFirst());
+        GamePlayResponse gamePlayResponse = gamePlayService.proceedGamePlay(gamePlayContext,
+                gamePlayNodeAndGameRound.getFirst());
 
-        gamePlayResponse =  processGamePlayResponse(gamePlayContext.getGameSession(), gamePlayContext.getGameSkin(), gamePlayContext.getSettings(),
+        gamePlayResponse = processGamePlayResponse(gamePlayContext.getGameSession(), gamePlayContext.getGameSkin(),
+                gamePlayContext.getSettings(),
                 gamePlayNodeAndGameRound.getSecond().orElse(null), gameActivityUid, gamePlayResponse);
 
         gamePlayContext.setEngineResponse(gamePlayResponse);
         this.nextHandler.handle(request, gamePlayContext);
-        
+
     }
 
     @Override
-    public void setNext(GameHandler nextHandler) {
+    public void setNext(GameFlowPipelineHandler nextHandler) {
         this.nextHandler = nextHandler;
     }
 
     private Pair<JsonNode, Optional<GameRound>> fetchGamePlayAndGameRound(GameSession gameSession,
-                                                                         GameSkin gameSkin,
-                                                                          JsonNode requestJsonNode,
-                                                                           Map<String, Object> settings) {
+            GameSkin gameSkin,
+            JsonNode requestJsonNode,
+            Map<String, Object> settings) {
         boolean continueRound = requestJsonNode.has("gameRound");
         boolean continueGamePlay = requestJsonNode.has("gamePlay");
         Pair<JsonNode, Optional<GameRound>> gamePlayNodeAndGameRound = null;
 
         if (continueRound || continueGamePlay) {
-            gamePlayNodeAndGameRound = continueRoundScenario(gameSession, gameSkin, requestJsonNode, settings, continueRound, continueGamePlay);
+            gamePlayNodeAndGameRound = continueRoundScenario(gameSession, gameSkin, requestJsonNode, settings,
+                    continueRound, continueGamePlay);
         } else {
-            gamePlayNodeAndGameRound = Pair.of(newRoundScenario(gameSession.getGameConfiguration(), gameSkin), Optional.empty());
+            gamePlayNodeAndGameRound = Pair.of(newRoundScenario(gameSession.getGameConfiguration(), gameSkin),
+                    Optional.empty());
         }
 
-         readGamePlayAndPlayerBagData(gameSession,
+        readGamePlayAndPlayerBagData(gameSession,
                 gameSkin,
                 settings,
                 gamePlayNodeAndGameRound.getFirst());
@@ -103,13 +107,12 @@ public class GamePlayHandler implements GameHandler{
         return gamePlayNodeAndGameRound;
     }
 
-
     private GamePlayResponse processGamePlayResponse(GameSession gameSession,
-                                                           GameSkin gameSkin,
-                                                           Map<String, Object> settingsJsonNode,
-                                                           GameRound gameRound,
-                                                           String gameActivityUid,
-                                                           GamePlayResponse gamePlayResponse) {
+            GameSkin gameSkin,
+            Map<String, Object> settingsJsonNode,
+            GameRound gameRound,
+            String gameActivityUid,
+            GamePlayResponse gamePlayResponse) {
 
         String gameRoundUid = gameRound == null ? UUID.randomUUID().toString() : gameRound.getUid();
         gamePlayResponse.setGameActivityUid(gameActivityUid);
@@ -122,20 +125,24 @@ public class GamePlayHandler implements GameHandler{
         JsonNode gamePlayJsonNodeDB = gamePlayService.saveGamePlayAndPushGameActivity(gamePlayResponse, gameSession);
         updatePlayerBagIfNeeded(gameSession, gameSkin, gamePlayResponse);
         return releaseLockIfNeeded(gameSession, gameSkin, settingsJsonNode, gamePlayResponse);
-//                .flatMap(engineResponse -> handleGamePlayResponse(engineResponse, settingsJsonNode, gameSkin, gameSession, player));
+        // .flatMap(engineResponse -> handleGamePlayResponse(engineResponse,
+        // settingsJsonNode, gameSkin, gameSession, player));
     }
 
-    private GamePlayResponse updatePlayerBagIfNeeded(GameSession gameSession, GameSkin gameSkin, GamePlayResponse gamePlayResponse) {
+    private GamePlayResponse updatePlayerBagIfNeeded(GameSession gameSession, GameSkin gameSkin,
+            GamePlayResponse gamePlayResponse) {
         JsonNode playerBag = gamePlayResponse.getPlayerBag();
 
         if (playerBag != null && playerBag.isObject()) {
-            PlayerBagDocument playerBagDocument = playerBagStore.updateBag(gameSession.getTenant(), gameSession, gameSkin, ObjectMapperUtils.convertToMap(objectMapper, playerBag));
+            PlayerBagDocument playerBagDocument = playerBagStore.updateBag(gameSession.getTenant(), gameSession,
+                    gameSkin, ObjectMapperUtils.convertToMap(objectMapper, playerBag));
         }
 
-        return  gamePlayResponse;
+        return gamePlayResponse;
     }
 
-    private GamePlayResponse releaseLockIfNeeded(GameSession gameSession, GameSkin gameSkin, Map<String, Object> settingsJsonNode, GamePlayResponse response) {
+    private GamePlayResponse releaseLockIfNeeded(GameSession gameSession, GameSkin gameSkin,
+            Map<String, Object> settingsJsonNode, GamePlayResponse response) {
         if (isLockingPlayerRequired(settingsJsonNode)) {
 
             redisTemplate.delete(gameSession.getPlayer() + "-" + gameSkin.getUid());
@@ -143,9 +150,6 @@ public class GamePlayHandler implements GameHandler{
 
         return response;
     }
-
-
-
 
     public Player getPlayer(GameSession gameSession) {
         Player player;
@@ -165,18 +169,17 @@ public class GamePlayHandler implements GameHandler{
     private void logPlayerBagBeforeGamePlay(JsonNode gamePlayJsonNode) {
         if (gamePlayJsonNode.has("data")) {
             JsonNode playerBagBefore = gamePlayJsonNode.get("data").get(PLAYER_BAG);
-            //log.info("player bag before game play {}", playerBagBefore.toPrettyString());
+            // log.info("player bag before game play {}", playerBagBefore.toPrettyString());
         }
     }
 
-
     private JsonNode readGamePlayAndPlayerBagData(GameSession gameSession,
-                                                        GameSkin gameSkin,
-                                                        Map<String, Object> settings,
-                                                        JsonNode gamePlayJsonNode) {
+            GameSkin gameSkin,
+            Map<String, Object> settings,
+            JsonNode gamePlayJsonNode) {
         JsonNode playerBag = readPlayerBagData(gameSession, gameSkin, settings);
 
-        if(playerBag!=null){
+        if (playerBag != null) {
             copyPlayerBagData(playerBag, gamePlayJsonNode);
         }
         return gamePlayJsonNode;
@@ -187,9 +190,10 @@ public class GamePlayHandler implements GameHandler{
         boolean readPlayerBag = isReadPlayerBag(settings);
         log.info("Read Player Bag {}", readPlayerBag);
         if (readPlayerBag) {
-            PlayerBagDocument playerBagDocument = playerBagStore.findOneByPlayerCurrencyGameAndSession(gameSession, gameSkin.getUid());
+            PlayerBagDocument playerBagDocument = playerBagStore.findOneByPlayerCurrencyGameAndSession(gameSession,
+                    gameSkin.getUid());
 
-            //TODO 28 Aug
+            // TODO 28 Aug
             // player.getData().put("playerBagUid", playerBagDocument.getId());
             return convertToJsonNode(objectMapper, playerBagDocument.getData());
         }
@@ -197,8 +201,8 @@ public class GamePlayHandler implements GameHandler{
     }
 
     private void copyPlayerBagData(JsonNode playerBag, JsonNode gamePlayJsonNode) {
-        //    log.info("gameplayJsonNode {}", gamePlayJsonNode.toPrettyString());
-        //  if (gamePlayJsonNode.has("data") && data.has(PLAYER_BAG)) {
+        // log.info("gameplayJsonNode {}", gamePlayJsonNode.toPrettyString());
+        // if (gamePlayJsonNode.has("data") && data.has(PLAYER_BAG)) {
         ((ObjectNode) gamePlayJsonNode).set("data", objectMapper.createObjectNode());
         ((ObjectNode) gamePlayJsonNode.get("data")).set(PLAYER_BAG, playerBag);
         // }
@@ -213,17 +217,15 @@ public class GamePlayHandler implements GameHandler{
                 GamePlay.startGame(
                         gameSkin.getUid(),
                         GameType.valueOf(gameSkin.getGameType()),
-                        gameConfiguration
-                )
-        );
+                        gameConfiguration));
     }
 
     private Pair<JsonNode, Optional<GameRound>> continueRoundScenario(GameSession gameSession,
-                                                                      GameSkin gameSkin,
-                                                                      JsonNode requestJsonNode,
-                                                                      Map<String, Object> settings,
-                                                                      boolean continueRound,
-                                                                      boolean continueGamePlay) {
+            GameSkin gameSkin,
+            JsonNode requestJsonNode,
+            Map<String, Object> settings,
+            boolean continueRound,
+            boolean continueGamePlay) {
         JsonNode gamePlayNode;
         if (continueGamePlay && !continueRound) {
             String gamePlayUid = requestJsonNode.get(GAME_PLAY).asText();
@@ -237,7 +239,7 @@ public class GamePlayHandler implements GameHandler{
             GameRound gameRound = gameRoundService.findOne(gameRoundId);
 
             gamePlayNode = gamePlayService.findGamePlay(gameRound.getGamePlay(),
-                            Status.INPROGRESS);
+                    Status.INPROGRESS);
             return Pair.of(gamePlayNode, Optional.of(gameRound));
         }
     }

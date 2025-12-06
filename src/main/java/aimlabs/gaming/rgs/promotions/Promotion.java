@@ -28,9 +28,9 @@ public class Promotion extends BaseDto {
 
     Date endDate;
 
-    //Bonus bonus;
+    // Bonus bonus;
 
-    //FreeSpins freeSpins;
+    // FreeSpins freeSpins;
 
     Integer freeSpins;
 

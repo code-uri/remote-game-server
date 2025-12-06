@@ -32,170 +32,162 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-
 @RestController
 @RequestMapping("/games")
 @Slf4j
 @Data
 public class GameProviderGamePlayController {
 
-    @Autowired
-    GameSessionBearerTokenProvider tokenProvider;
+        @Autowired
+        GameSessionBearerTokenProvider tokenProvider;
 
-    @Autowired
-    ObjectMapper objectMapper;
+        @Autowired
+        ObjectMapper objectMapper;
 
-    @Autowired
-    IPlayerService playerService;
+        @Autowired
+        IPlayerService playerService;
 
-    @Autowired
-    GameRoundService gameRoundService;
+        @Autowired
+        GameRoundService gameRoundService;
 
-    @Autowired
-    MongoTemplate mongoTemplate;
+        @Autowired
+        MongoTemplate mongoTemplate;
 
-    @Value("${app.player.auth-header:Authorization}")
-    private String authHeader;
+        @Value("${app.player.auth-header:Authorization}")
+        private String authHeader;
 
+        @Value("${app.player.log-demo-requests:false}")
+        private String logDemoRequests;
 
-    @Value("${app.player.log-demo-requests:false}")
-    private String logDemoRequests;
+        @Autowired
+        private IGameSessionService gameSessionService;
 
-    @Autowired
-    private IGameSessionService gameSessionService;
+        @Autowired
+        private IBrandService brandService;
 
-    @Autowired
-    private IBrandService brandService;
+        @Autowired
+        private GameSkinService gameSkinService;
 
-    @Autowired
-    private GameSkinService gameSkinService;
+        @Autowired
+        private GameRequestHandler gameRequestHandler;
 
-    @Autowired
-    private GameRequestHandler gameRequestHandler;
+        @Autowired
+        private GameSettingsService gameSettingsService;
 
-    @Autowired
-    private GameSettingsService gameSettingsService;
+        @Autowired
+        private BrandGameService brandGameService;
 
-    @Autowired
-    private BrandGameService brandGameService;
+        @PostMapping("/play")
+        public ResponseEntity<JsonNode> playGame(
+                        GameSession gameSession,
+                        @RequestBody JsonNode request,
+                        HttpServletRequest httpServletRequest) {
 
+                return ResponseEntity.ok()
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                .body(ScopedValue.where(
+                                                GameSessionContext.GAME_SESSION, gameSession)
+                                                .call(() -> gameRequestHandler.playGame(gameSession, request)));
 
-    @PostMapping("/play")
-    public ResponseEntity<JsonNode> playGame(
-            GameSession gameSession,
-            @RequestBody JsonNode request,
-            HttpServletRequest httpServletRequest) {
-
-       return ResponseEntity.ok()
-            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-            .body( ScopedValue.where(
-               GameSessionContext.GAME_SESSION, gameSession
-       ).call(() -> gameRequestHandler.playGame(gameSession, request)));
-        
-    }
-
-    @GetMapping("/game-rounds/{uid}/confirm")
-    public void confirmHand(GameSession gameSession,
-                            @PathVariable(name = "uid") String uid,
-                            HttpServletRequest httpServletRequest) {
-
-        GameRound gameRound = ScopedValue.where(
-                GameSessionContext.GAME_SESSION, gameSession
-        ).call(() -> gameRoundService.confirmHand(uid));
-        if (gameRound == null || !gameRound.isHandConfirmed())
-            throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Request failed!");
-    }
-
-
-    @PostMapping("/game-rounds/{uid}/ack")
-    public void ack(GameSession gameSession,
-                    @RequestBody JsonNode request,
-                    @PathVariable(name = "uid") String uid,
-                    HttpServletRequest httpServletRequest) {
-        //String ipaddress = getRemoteIPAddress(serverHttpRequest);
-        long startMillis = System.currentTimeMillis();
-        log.info("Received ack request for game-round: {} ", uid);
-        JsonNode response = ScopedValue.where(
-                GameSessionContext.GAME_SESSION, gameSession
-        ).call(() -> gameRequestHandler
-                .ack(gameSession, uid, request));
-
-    }
-
-    @GetMapping("/settings")
-    Map<String, Object> settings(GameSession gameSession, @RequestParam String brand, @RequestParam String game) {
-
-        return ScopedValue.where(
-                GameSessionContext.GAME_SESSION, gameSession
-        ).call(() -> gameSettingsService.getBrandGameSettings(gameSession.getTenant(), brand, game));
-    }
-
-
-    @PostMapping("/initialise")
-    ResponseEntity<JsonNode> initialiseGame(@RequestBody() GameInitialiseRequest req,
-                                            HttpServletRequest httpServletRequest) {
-        Pair<GameSession, JsonNode> pair = gameRequestHandler
-                .initialiseGame(req.getToken(), req.getBrand(), req.getGameId());
-
-        String jwtToken = tokenProvider.createToken(pair.getFirst(),
-                req.getGameId());
-        return ResponseEntity.ok()
-                .header(authHeader, "Bearer " + jwtToken)
-                .body(pair.getSecond());
-    }
-
-
-    @GetMapping("/history")
-    SearchResponse<JsonNode>
-    gameHistory(GameSession gameSession,
-                @RequestParam(required = false, name = "gameId") String gameId,
-                @RequestParam(required = true, name = "page", defaultValue = "0") String pageStr,
-                @RequestParam(required = true, name = "size", defaultValue = "10") String sizeStr,
-                HttpServletRequest httpServletRequest) {
-        long startTime = System.currentTimeMillis();
-
-        // 'player' : ?0 ,'gameId':  ?1,  'status' :  'COMPLETED'
-        SearchRequest searchRequest = new SearchRequest();
-        searchRequest.getFilters().put("status", List.of("COMPLETED"));
-        searchRequest.setPage(Integer.parseInt(pageStr));
-        searchRequest.setSize(Integer.parseInt(sizeStr));
-        searchRequest.getProperties().put("player", gameSession.getPlayer());
-        SortOrder sortOrder = new SortOrder("DESC", "id");
-        LinkedList<SortOrder> sortList = new LinkedList<>();
-        sortList.add(sortOrder);
-        searchRequest.setSort(sortList);
-        if (StringUtils.hasText(gameId))
-            searchRequest.getProperties().put("gameId", gameId);
-
-        return ScopedValue.where(
-                GameSessionContext.GAME_SESSION, gameSession
-        ).call(() -> gameRequestHandler.history(searchRequest));
-    }
-
-    @GetMapping("/game-rounds/{uid}/details")
-    ResponseEntity<JsonNode>
-    gameRoundDetails(@PathVariable String uid,
-                     @RequestHeader(value = "tenant", defaultValue = "default") String tenant) {
-
-        GameRound gameRound = gameRoundService.getStore().getGameRoundDetails(uid);
-
-        if (gameRound == null)
-            throw new BaseRuntimeException(SystemErrorCode.NOT_FOUND);
-
-        JsonNode response = gameRequestHandler
-                .gamePlayAndActivityDetails(gameRound);
-
-        return ResponseEntity.ok(response);
-    }
-
-    private String getRemoteIPAddress(HttpServletRequest request) {
-        String remoteAddress = request.getHeader("X-Forwarded-For");
-        if (remoteAddress == null) {
-            return request.getRemoteAddr();
         }
-        if (remoteAddress.contains(",")) {
-            return remoteAddress.split(",")[0];
+
+        @GetMapping("/game-rounds/{uid}/confirm")
+        public void confirmHand(GameSession gameSession,
+                        @PathVariable(name = "uid") String uid,
+                        HttpServletRequest httpServletRequest) {
+
+                GameRound gameRound = ScopedValue.where(
+                                GameSessionContext.GAME_SESSION, gameSession)
+                                .call(() -> gameRoundService.confirmHand(uid));
+                if (gameRound == null || !gameRound.isHandConfirmed())
+                        throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Request failed!");
         }
-        return remoteAddress;
-    }
+
+        @PostMapping("/game-rounds/{uid}/ack")
+        public void ack(GameSession gameSession,
+                        @RequestBody JsonNode request,
+                        @PathVariable(name = "uid") String uid,
+                        HttpServletRequest httpServletRequest) {
+                // String ipaddress = getRemoteIPAddress(serverHttpRequest);
+                log.info("Received ack request for game-round: {} ", uid);
+                ScopedValue.where(
+                                GameSessionContext.GAME_SESSION, gameSession).call(
+                                                () -> gameRequestHandler
+                                                                .ack(gameSession, uid, request));
+
+        }
+
+        @GetMapping("/settings")
+        Map<String, Object> settings(GameSession gameSession, @RequestParam String brand, @RequestParam String game) {
+
+                return ScopedValue.where(
+                                GameSessionContext.GAME_SESSION, gameSession)
+                                .call(() -> gameSettingsService.getBrandGameSettings(gameSession.getTenant(), brand,
+                                                game));
+        }
+
+        @PostMapping("/initialise")
+        ResponseEntity<JsonNode> initialiseGame(@RequestBody() GameInitialiseRequest req,
+                        HttpServletRequest httpServletRequest) {
+                Pair<GameSession, JsonNode> pair = gameRequestHandler
+                                .initialiseGame(req.getToken(), req.getBrand(), req.getGameId());
+
+                String jwtToken = tokenProvider.createToken(pair.getFirst(),
+                                req.getGameId());
+                return ResponseEntity.ok()
+                                .header(authHeader, "Bearer " + jwtToken)
+                                .body(pair.getSecond());
+        }
+
+        @GetMapping("/history")
+        SearchResponse<JsonNode> gameHistory(GameSession gameSession,
+                        @RequestParam(required = false, name = "gameId") String gameId,
+                        @RequestParam(required = true, name = "page", defaultValue = "0") String pageStr,
+                        @RequestParam(required = true, name = "size", defaultValue = "10") String sizeStr,
+                        HttpServletRequest httpServletRequest) {
+
+                // 'player' : ?0 ,'gameId': ?1, 'status' : 'COMPLETED'
+                SearchRequest searchRequest = new SearchRequest();
+                searchRequest.getFilters().put("status", List.of("COMPLETED"));
+                searchRequest.setPage(Integer.parseInt(pageStr));
+                searchRequest.setSize(Integer.parseInt(sizeStr));
+                searchRequest.getProperties().put("player", gameSession.getPlayer());
+                SortOrder sortOrder = new SortOrder("DESC", "id");
+                LinkedList<SortOrder> sortList = new LinkedList<>();
+                sortList.add(sortOrder);
+                searchRequest.setSort(sortList);
+                if (StringUtils.hasText(gameId))
+                        searchRequest.getProperties().put("gameId", gameId);
+
+                return ScopedValue.where(
+                                GameSessionContext.GAME_SESSION, gameSession)
+                                .call(() -> gameRequestHandler.history(searchRequest));
+        }
+
+        @GetMapping("/game-rounds/{uid}/details")
+        ResponseEntity<JsonNode> gameRoundDetails(@PathVariable String uid,
+                        @RequestHeader(value = "tenant", defaultValue = "default") String tenant) {
+
+                GameRound gameRound = gameRoundService.getStore().getGameRoundDetails(uid);
+
+                if (gameRound == null)
+                        throw new BaseRuntimeException(SystemErrorCode.NOT_FOUND);
+
+                JsonNode response = gameRequestHandler
+                                .gamePlayAndActivityDetails(gameRound);
+
+                return ResponseEntity.ok(response);
+        }
+
+        @SuppressWarnings("unused")
+        private String getRemoteIPAddress(HttpServletRequest request) {
+                String remoteAddress = request.getHeader("X-Forwarded-For");
+                if (remoteAddress == null) {
+                        return request.getRemoteAddr();
+                }
+                if (remoteAddress.contains(",")) {
+                        return remoteAddress.split(",")[0];
+                }
+                return remoteAddress;
+        }
 }

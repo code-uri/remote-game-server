@@ -34,10 +34,9 @@ public class GameSettingsService
         extends AbstractEntityService<GameSettings, GameSettingsDocument>
         implements IGameSettingsService, CommandLineRunner {
 
-
     public static final String GAME_SETTINGS = "game-settings";
-    //public static final String STAKE_SETTINGS = "stake-settings";
-    //public static final String AUTO_PLAY_SETTINGS = "auto-play-settings";
+    // public static final String STAKE_SETTINGS = "stake-settings";
+    // public static final String AUTO_PLAY_SETTINGS = "auto-play-settings";
 
     @Autowired
     GameSettingsStore store;
@@ -51,33 +50,36 @@ public class GameSettingsService
     @Autowired
     SettingsTemplateStore settingsTemplateStore;
 
-  /*
-    public Mono<GameSettings> findOne(String uid) {
-        return this.getStore().findOneByUid(uid)
-                .map(getMapper()::asDto);
-    }*/
-
+    /*
+     * public Mono<GameSettings> findOne(String uid) {
+     * return this.getStore().findOneByUid(uid)
+     * .map(getMapper()::asDto);
+     * }
+     */
 
     private ConcurrentHashMap<String, ConcurrentHashMap<String, JsonNode>> cacheMap = new ConcurrentHashMap<>();
 
-
-    /*public GameSettingsService(ReactiveRedisConnectionFactory factory){
-        JdkSerializationRedisSerializer jdkSerializer = new JdkSerializationRedisSerializer(this.getClass().getClassLoader());
-        RedisSerializationContext<Object, Object> serializationContext = RedisSerializationContext.newSerializationContext()
-                .key(jdkSerializer)
-                .value(jdkSerializer)
-                .hashKey(jdkSerializer).hashValue(jdkSerializer).build();
-        reactiveRedisTemplate = new ReactiveRedisTemplate<>(factory, serializationContext);
-    }*/
-
+    /*
+     * public GameSettingsService(ReactiveRedisConnectionFactory factory){
+     * JdkSerializationRedisSerializer jdkSerializer = new
+     * JdkSerializationRedisSerializer(this.getClass().getClassLoader());
+     * RedisSerializationContext<Object, Object> serializationContext =
+     * RedisSerializationContext.newSerializationContext()
+     * .key(jdkSerializer)
+     * .value(jdkSerializer)
+     * .hashKey(jdkSerializer).hashValue(jdkSerializer).build();
+     * reactiveRedisTemplate = new ReactiveRedisTemplate<>(factory,
+     * serializationContext);
+     * }
+     */
 
     @Autowired
     private ObjectMapper objectMapper;
 
     public GameSettingsService() {
         cacheMap.put(GAME_SETTINGS, new ConcurrentHashMap<>());
-        //cacheMap.put(STAKE_SETTINGS, new ConcurrentHashMap<>());
-        //cacheMap.put(AUTO_PLAY_SETTINGS, new ConcurrentHashMap<>());
+        // cacheMap.put(STAKE_SETTINGS, new ConcurrentHashMap<>());
+        // cacheMap.put(AUTO_PLAY_SETTINGS, new ConcurrentHashMap<>());
     }
 
     public static JsonNode merge(JsonNode mainNode, JsonNode updateNode) {
@@ -91,9 +93,11 @@ public class GameSettingsService
 
             // If the node is an @ArrayNode
             if (valueToBeUpdated != null && valueToBeUpdated.isArray() &&
-                updatedValue.isArray()) {
+                    updatedValue.isArray()) {
 
-                // log.info("fieldName  {} valueToBeUpdated {} updatedValue {} {} ",updatedFieldName,valueToBeUpdated, updatedValue,  !updatedValue.get(0).isObject());
+                // log.info("fieldName {} valueToBeUpdated {} updatedValue {} {}
+                // ",updatedFieldName,valueToBeUpdated, updatedValue,
+                // !updatedValue.get(0).isObject());
                 if (!updatedValue.isEmpty() && !updatedValue.get(0).isObject()) {
                     ((ObjectNode) mainNode).set(updatedFieldName, updatedValue);
                     continue;
@@ -104,7 +108,8 @@ public class GameSettingsService
                     JsonNode updatedChildNode = updatedValue.get(i);
                     if (updatedChildNode == null)
                         continue;
-                    // Create a new Node in the node that should be updated, if there was no corresponding node in it
+                    // Create a new Node in the node that should be updated, if there was no
+                    // corresponding node in it
                     // Use-case - where the updateNode will have a new element in its Array
                     if (valueToBeUpdated.size() <= i) {
                         ((ArrayNode) valueToBeUpdated).add(updatedChildNode);
@@ -122,20 +127,22 @@ public class GameSettingsService
                 merge(valueToBeUpdated, updatedValue);
             } else {
 
-                if (updatedValue != null && updatedValue.getNodeType() != JsonNodeType.POJO && updatedValue.getNodeType() != JsonNodeType.OBJECT) {
-                    //  log.info("merge replace {} dataType {} with {}",updatedFieldName, updatedValue.getNodeType(), updatedValue);
+                if (updatedValue != null && updatedValue.getNodeType() != JsonNodeType.POJO
+                        && updatedValue.getNodeType() != JsonNodeType.OBJECT) {
+                    // log.info("merge replace {} dataType {} with {}",updatedFieldName,
+                    // updatedValue.getNodeType(), updatedValue);
                     ((ObjectNode) mainNode).set(updatedFieldName, updatedValue);
-                    //  log.info("after merge {}",mainNode);
+                    // log.info("after merge {}",mainNode);
                 } else if (updatedValue != null) {
 
                     if (valueToBeUpdated == null) {
                         valueToBeUpdated = JsonNodeFactory.instance.objectNode();
                         ((ObjectNode) mainNode).set(updatedFieldName, valueToBeUpdated);
                     }
-                    //log.info("merge updatedFieldName {} dataType {} with {}",valueToBeUpdated, updatedValue.getNodeType(), updatedValue);
+                    // log.info("merge updatedFieldName {} dataType {} with {}",valueToBeUpdated,
+                    // updatedValue.getNodeType(), updatedValue);
                     merge(valueToBeUpdated, updatedValue);
                 }
-
 
             }
         }
@@ -206,7 +213,7 @@ public class GameSettingsService
 
     public static boolean isForceUnfinished(Map<String, Object> settings) {
         return settings.containsKey("forceUnfinishedGames")
-               && (boolean) settings.getOrDefault("forceUnfinishedGames", false);
+                && (boolean) settings.getOrDefault("forceUnfinishedGames", false);
     }
 
     public static boolean isReadPlayerBag(Map<String, Object> settings) {
@@ -223,8 +230,8 @@ public class GameSettingsService
 
         JsonNode jsonNode = findGameSettings(tenant, brand, gameId);
 
-
-        // log.info("brand: {} game: {} currency: {}, Game Settings : {} ",brand, gameId, currency, jsonNode.toPrettyString());
+        // log.info("brand: {} game: {} currency: {}, Game Settings : {} ",brand,
+        // gameId, currency, jsonNode.toPrettyString());
         Map<String, Object> settingsMap = objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {
         });
 
@@ -238,11 +245,12 @@ public class GameSettingsService
         Function<String, JsonNode> readFromDB = o -> (JsonNode) store.getSettings(tenant, brand, gameId)
                 .stream()
                 .map(template -> {
-                    SettingsTemplateDocument settingsTemplateDocument = settingsTemplateStore.findOneByUid(tenant, template);
+                    SettingsTemplateDocument settingsTemplateDocument = settingsTemplateStore.findOneByUid(tenant,
+                            template);
                     return getObjectMapper().valueToTree(settingsTemplateDocument);
                 })
-                .reduce((jsonNode, jsonNode2) -> GameSettingsService.merge((JsonNode) jsonNode, (JsonNode) jsonNode2)).get();
-
+                .reduce((jsonNode, jsonNode2) -> GameSettingsService.merge((JsonNode) jsonNode, (JsonNode) jsonNode2))
+                .get();
 
         return monoCache(GAME_SETTINGS, key.toLowerCase(), readFromDB);
     }
@@ -257,10 +265,12 @@ public class GameSettingsService
     }
 
     @Override
-    public Map<String, Object> findGameSettingsForCurrency(String tenant, String brand, String gameId, String currency) {
+    public Map<String, Object> findGameSettingsForCurrency(String tenant, String brand, String gameId,
+            String currency) {
         JsonNode jsonNode = findGameSettings(tenant, brand.toLowerCase(), gameId.toLowerCase());
 
-        //log.info("brand: {} game: {} currency: {}, Game Settings : {} ",brand, gameId, currency, jsonNode.toPrettyString());
+        // log.info("brand: {} game: {} currency: {}, Game Settings : {} ",brand,
+        // gameId, currency, jsonNode.toPrettyString());
         Map<String, Object> settingsMap = objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {
         });
 
@@ -273,21 +283,25 @@ public class GameSettingsService
         settingsMap.remove("modifiedOn");
 
         if (settingsMap.containsKey("defaultStakeSettings")) {
+            @SuppressWarnings("unchecked")
             Map<String, Object> defaultStakeSettings = (Map<String, Object>) settingsMap.remove("defaultStakeSettings");
             settingsMap.putAll(defaultStakeSettings);
         }
         if (settingsMap.containsKey("stakes")) {
+            @SuppressWarnings("unchecked")
             Map<String, Object> stakes = (Map<String, Object>) settingsMap.remove("stakes");
 
             if (currency == null) {
                 settingsMap.putAll(stakes);
             } else if (stakes.containsKey(currency)) {
+                @SuppressWarnings("unchecked")
                 Map<String, Object> currencyStakes = (Map<String, Object>) stakes.get(currency);
                 settingsMap.putAll(currencyStakes);
             }
         }
 
         if (settingsMap.containsKey("streakWagers")) {
+            @SuppressWarnings("unchecked")
             Map<String, Object> stakes = (Map<String, Object>) settingsMap.remove("streakWagers");
             if (stakes.containsKey(currency)) {
                 Double streakWager = ((Number) stakes.get(currency)).doubleValue();
@@ -296,12 +310,13 @@ public class GameSettingsService
         }
         if (settingsMap.containsKey("data")) {
 
+            @SuppressWarnings("unchecked")
             Map<String, Object> extraConfig = (Map<String, Object>) settingsMap.remove("data");
 
             // log.info("extra config {}", extraConfig);
             settingsMap.putAll(extraConfig);
             settingsMap.remove("reconcile");
-            //((ObjectNode)jsonNode).remove("autoPlayEnabled");
+            // ((ObjectNode)jsonNode).remove("autoPlayEnabled");
         }
         return settingsMap;
 
@@ -310,15 +325,19 @@ public class GameSettingsService
     public Map<String, Object> findStakeSettings(String tenant, String brand, String gameId, String currency) {
 
         JsonNode jsonNode = findGameSettings(tenant, brand, gameId);
-        // log.info("brand: {} game: {} currency: {}, Game Settings : {} ",brand, gameId, currency, jsonNode.toPrettyString());
+        // log.info("brand: {} game: {} currency: {}, Game Settings : {} ",brand,
+        // gameId, currency, jsonNode.toPrettyString());
         Map<String, Object> settingsMap = objectMapper.convertValue(jsonNode, new TypeReference<Map<String, Object>>() {
         });
 
+        @SuppressWarnings("unchecked")
         Map<String, Object> stakes = (Map<String, Object>) settingsMap.get("stakes");
         if (currency == null) {
             return stakes;
         } else if (stakes.containsKey(currency)) {
-            return (Map<String, Object>) stakes.get(currency);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> currencyStakes = (Map<String, Object>) stakes.get(currency);
+            return currencyStakes;
         }
         return stakes;
     }
@@ -353,7 +372,7 @@ public class GameSettingsService
 
     public void handleEvent(String refresh) {
         log.info("Refresh {}.", refresh);
-        //cacheMap.get(GAME_SETTINGS).clear();
+        // cacheMap.get(GAME_SETTINGS).clear();
         if (GAME_SETTINGS.concat(":*").equals(refresh) || "*".equals(refresh)) {
             log.info("Cleared game-settings cache.");
             cacheMap.get(GAME_SETTINGS).clear();
@@ -364,7 +383,7 @@ public class GameSettingsService
                 cacheMap.get(GAME_SETTINGS).remove(key);
             });
         } else if (StringUtils.hasText(refresh)) {
-            //String key = refresh.split(":")[1];
+            // String key = refresh.split(":")[1];
             log.info("Clear cache for key {}", refresh);
             cacheMap.get(GAME_SETTINGS).remove(refresh);
         }
@@ -385,28 +404,27 @@ public class GameSettingsService
         container.setConnectionFactory(redisTemplate.getConnectionFactory());
         container.addMessageListener(listenerAdapter, new PatternTopic("refresh-game-settings"));
 
-
-//          if (disposable == null) {
-//            disposable = redisTemplate.watch();  listenToChannel("refresh-game-settings")
-//                    //.sample(Duration.ofMinutes(1))
-//                    .doOnNext(stringObjectMessage -> {
-//                        String refresh = stringObjectMessage.getMessage();
-//                        handleEvent(refresh);
-//                    }).subscribeOn(Schedulers.boundedElastic()).subscribe();
-//        }
+        // if (disposable == null) {
+        // disposable = redisTemplate.watch(); listenToChannel("refresh-game-settings")
+        // //.sample(Duration.ofMinutes(1))
+        // .doOnNext(stringObjectMessage -> {
+        // String refresh = stringObjectMessage.getMessage();
+        // handleEvent(refresh);
+        // }).subscribeOn(Schedulers.boundedElastic()).subscribe();
+        // }
     }
 
-
-//    public static ObjectNode copyStakes(String  currency, JsonNode from, ObjectNode to) {
-//
-//        if (from.has("defaultStakeSettings")) {
-//            to.setAll((ObjectNode) from.get("defaultStakeSettings"));
-//        }
-//        if (from.has("stakes")
-//            && (from.get("stakes")).get(currency) != null) {
-//            JsonNode currencyStakes = from.get("stakes").get(currency);
-//            to.setAll((ObjectNode) currencyStakes);
-//        }
-//        return to;
-//    }
+    // public static ObjectNode copyStakes(String currency, JsonNode from,
+    // ObjectNode to) {
+    //
+    // if (from.has("defaultStakeSettings")) {
+    // to.setAll((ObjectNode) from.get("defaultStakeSettings"));
+    // }
+    // if (from.has("stakes")
+    // && (from.get("stakes")).get(currency) != null) {
+    // JsonNode currencyStakes = from.get("stakes").get(currency);
+    // to.setAll((ObjectNode) currencyStakes);
+    // }
+    // return to;
+    // }
 }

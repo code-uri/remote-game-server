@@ -18,6 +18,11 @@ repositories {
     mavenCentral()
 }
 
+configurations.all {
+    resolutionStrategy {
+        force 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    }
+}
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -35,6 +40,7 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
     implementation('io.jsonwebtoken:jjwt-jackson:0.13.0')
 
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
     implementation "in.aimlabs:rng:$RNG_VERSION"
     implementation "org.javamoney:moneta:1.4.5"

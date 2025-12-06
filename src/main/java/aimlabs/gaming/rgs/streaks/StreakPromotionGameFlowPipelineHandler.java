@@ -27,9 +27,8 @@ import java.util.Map;
 
 @Service
 @Slf4j
-public class StreakPromotionHandler implements GameHandler, GameInitializer {
-
-    GameHandler nextHandler;
+public class StreakPromotionGameFlowPipelineHandler implements GameFlowPipelineHandler, GameInitializer {
+    private GameFlowPipelineHandler nextHandler;
 
     @Autowired
     StreakCounterStore streakCounterStore;
@@ -40,7 +39,6 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
     @Autowired
     GameEngineServiceAdaptor engineAdaptor;
 
-
     @Autowired
     ObjectMapper objectMapper;
 
@@ -48,8 +46,8 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
         return streakCounter.getStatus() == Status.COMPLETED
                 ? 0
                 : (streakUpdate.getOperation() == StreakUpdate.Operation.INCREMENT
-                ? streakCounter.getStreak() + 1
-                : streakCounter.getStreak());
+                        ? streakCounter.getStreak() + 1
+                        : streakCounter.getStreak());
     }
 
     @Override
@@ -74,16 +72,19 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
 
                 Map<String, Object> settings = context.getSettings();
                 if (settings.get("streakWager") == null || !(settings.get("streakWager") instanceof Double)) {
-                    throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "streak not supported for this currency");
+                    throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
+                            "streak not supported for this currency");
                 }
 
                 if (!gamePlayState.has("streakBonusMultipliers")) {
-                    throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "streak multipliers are not defined");
+                    throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
+                            "streak multipliers are not defined");
                 }
 
                 ArrayNode streakBonusMultipliers = (ArrayNode) gamePlayState.get("streakBonusMultipliers");
 
-                List<Double> streakBonusMultipliersList = Arrays.stream(objectMapper.convertValue(streakBonusMultipliers, Double[].class)).toList();
+                List<Double> streakBonusMultipliersList = Arrays
+                        .stream(objectMapper.convertValue(streakBonusMultipliers, Double[].class)).toList();
 
                 JsonNode streakUpdateJsonNode = gamePlayResponse.getStreakUpdate();
                 StreakUpdate streakUpdate = objectMapper.convertValue(streakUpdateJsonNode, StreakUpdate.class);
@@ -98,8 +99,10 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
                             streakUpdate.getLastGameResult(),
                             streakBonusMultipliersList);
                 } else {
-                    // This handles INCREMENT, SET, and any other operation by calling incrementStreakForPlayer.
-                    // The increment amount is 1 for INCREMENT, and 0 for SET or any other operation.
+                    // This handles INCREMENT, SET, and any other operation by calling
+                    // incrementStreakForPlayer.
+                    // The increment amount is 1 for INCREMENT, and 0 for SET or any other
+                    // operation.
                     int incrementAmount = (operation == StreakUpdate.Operation.INCREMENT) ? 1 : 0;
                     streakCounter = streakCounterStore.incrementStreakForPlayer(gameSession.getPlayer(),
                             gameSession.getGame(),
@@ -110,9 +113,9 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
                             streakBonusMultipliersList,
                             incrementAmount);
 
-                    //final streak reached. end streak and award streak wins.
+                    // final streak reached. end streak and award streak wins.
                     if (operation == StreakUpdate.Operation.INCREMENT
-                        && streakCounter.getStreak() + 1 == streakBonusMultipliersList.size()) {
+                            && streakCounter.getStreak() + 1 == streakBonusMultipliersList.size()) {
                         streakCounter = streakCounterStore.endStreak(player.getUid(),
                                 gameSession.getGame(),
                                 gamePlayResponse.getGameRoundId(),
@@ -121,23 +124,22 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
                     }
                 }
 
-                if(streakCounter!=null) {
+                if (streakCounter != null) {
 
                     gamePlayResponse = addStreakInfoToResponse(context,
                             getStreakFromCounter(streakCounter, streakUpdate),
                             streakCounter.getStreak(),
                             null,
                             streakCounter);
-                }else{
+                } else {
                     Double streakWager = (Double) settings.get("streakWager");
 
                     if (streakWager > 0) {
                         gamePlayResponse = addStreakInfoToResponse(context,
-                                streakUpdate.getOperation() == StreakUpdate.Operation.INCREMENT ? 1 : 0,//streak count
+                                streakUpdate.getOperation() == StreakUpdate.Operation.INCREMENT ? 1 : 0, // streak count
                                 0,
                                 BigDecimal.valueOf(streakWager),
                                 null);
-
 
                         ObjectNode gameClientResponseNode = (ObjectNode) gamePlayResponse.getEngineResponse();
                         gameClientResponseNode.put("streakWager", streakWager);
@@ -152,15 +154,15 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
     }
 
     @Override
-    public void setNext(GameHandler nextHandler) {
+    public void setNext(GameFlowPipelineHandler nextHandler) {
         this.nextHandler = nextHandler;
     }
 
     private GamePlayResponse addStreakInfoToResponse(GamePlayContext context,
-                                                     int streak,
-                                                     int previousStreak,
-                                                     BigDecimal streakWager,
-                                                     StreakCounter streakCounter) {
+            int streak,
+            int previousStreak,
+            BigDecimal streakWager,
+            StreakCounter streakCounter) {
 
         ObjectNode gamePlay = (ObjectNode) context.getEngineResponse().getGamePlay();
         ObjectNode gameActivity = (ObjectNode) context.getEngineResponse().getGameActivity();
@@ -176,14 +178,12 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
             ((ObjectNode) gamePlay.get("gamePlayState")).put("streakWin", streakWin);
         }
 
-
-        ObjectNode gameClientResponse = context.getEngineResponse().getEngineResponse().has("gameClientResponse") ?
-                (ObjectNode) context.getEngineResponse().getEngineResponse().get("gameClientResponse") :
-                (ObjectNode) context.getEngineResponse().getEngineResponse();
+        ObjectNode gameClientResponse = context.getEngineResponse().getEngineResponse().has("gameClientResponse")
+                ? (ObjectNode) context.getEngineResponse().getEngineResponse().get("gameClientResponse")
+                : (ObjectNode) context.getEngineResponse().getEngineResponse();
         gameClientResponse.put("streakWager", streakWager);
         gameClientResponse.put("streak", streak);
         gameClientResponse.put("streakWin", streakWin);
-
 
         Update gameActivityUpdate = Update.update("streak", streak);
         Update gamePlayUpdate = Update.update("gamePlayState.startStreakCount", previousStreak);
@@ -200,18 +200,18 @@ public class StreakPromotionHandler implements GameHandler, GameInitializer {
                 .is((gamePlay.get("uid").asText()))), gamePlayUpdate, "GamePlays");
 
         UpdateResult gameActivityResult = streakCounterStore.getTemplate().updateFirst(Query.query(Criteria.where("uid")
-                        .is(context.getEngineResponse().getGameActivityUid())),
+                .is(context.getEngineResponse().getGameActivityUid())),
                 gameActivityUpdate, "GameActivities");
 
         return context.getEngineResponse();
     }
 
     public JsonNode loadData(GameSession gameSession, GameSkin gameSkin, Map<String, Object> settings) {
-        StreakCounterDocument streakCounterDocument = streakCounterStore.findActiveStreak(gameSession.getGame(), gameSession.getPlayer(), gameSession.getCurrency());
-
+        StreakCounterDocument streakCounterDocument = streakCounterStore.findActiveStreak(gameSession.getGame(),
+                gameSession.getPlayer(), gameSession.getCurrency());
 
         ObjectNode playerBag = objectMapper.createObjectNode();
-        if(streakCounterDocument!=null)
+        if (streakCounterDocument != null)
             playerBag.put("streak", streakCounterDocument.getStreak());
         return objectMapper.createObjectNode().set("playerBag", playerBag);
     }

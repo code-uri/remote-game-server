@@ -13,7 +13,6 @@ import aimlabs.gaming.rgs.promotions.PromotionService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -27,26 +26,24 @@ public class GameProviderPromotionsController {
     @Autowired
     FreeSpinsAllotmentService freeSpinsIssueService;
 
-
     @PostMapping("/promotions/award")
     public FreeSpinsPromotionResponse awardPromotion(@RequestBody FreeSpinsPromotionRequest freeSpinsPromotionRequest,
-                                                     @RequestHeader("X-Client-ID") String clientId,
-                                                     @RequestHeader("X-Client-Key") String clientKey,
-                                                     HttpServletRequest httpServletRequest) {
+            @RequestHeader("X-Client-ID") String clientId,
+            @RequestHeader("X-Client-Key") String clientKey,
+            HttpServletRequest httpServletRequest) {
 
         freeSpinsPromotionRequest.setClientId(clientId);
         freeSpinsPromotionRequest.setClientKey(clientKey);
         Promotion promotion = promotionService.award(freeSpinsPromotionRequest);
-
 
         return new FreeSpinsPromotionResponse(promotion.getId(), promotion.getPromotionRefId(), promotion.getStatus());
     }
 
     @GetMapping("/promotions/{promotionRefId}")
     public FreeSpinsPromotionResponse getPromotion(@PathVariable String promotionRefId,
-                                                           HttpServletRequest httpServletRequest) {
+            HttpServletRequest httpServletRequest) {
         Promotion promotion = promotionService.findByPromotionRefId(promotionRefId);
-        if(promotion==null){
+        if (promotion == null) {
             throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion not found");
         }
         return new FreeSpinsPromotionResponse(promotion.getId(), promotion.getPromotionRefId(), promotion.getStatus());
@@ -54,10 +51,10 @@ public class GameProviderPromotionsController {
 
     @DeleteMapping("/promotions/{promotionRefId}")
     public FreeSpinsPromotionResponse cancelPromotion(@PathVariable String promotionRefId,
-                                                         HttpServletRequest httpServletRequest) {
+            HttpServletRequest httpServletRequest) {
 
         Promotion promotion = promotionService.findByPromotionRefId(promotionRefId);
-        if(promotion==null)
+        if (promotion == null)
             throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion not found");
 
         promotion.setStatus(Status.CANCELLED);
@@ -66,13 +63,11 @@ public class GameProviderPromotionsController {
 
     @GetMapping("/promotions/{id}/claim")
     public FreeSpinsAllotment claimPromotion(@PathVariable(name = "id") String promotionId,
-                                             GameSession gameSession,
-                                             HttpServletRequest httpServletRequest) {
-        //String ipaddress = getRemoteIPAddress(serverHttpRequest);
-        long startMillis = System.currentTimeMillis();
+            GameSession gameSession,
+            HttpServletRequest httpServletRequest) {
+        // String ipaddress = getRemoteIPAddress(serverHttpRequest);
 
         return freeSpinsIssueService.claimFreeSpin(promotionId, gameSession);
     }
-
 
 }

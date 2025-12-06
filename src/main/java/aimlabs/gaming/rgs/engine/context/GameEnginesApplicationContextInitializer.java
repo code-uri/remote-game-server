@@ -50,27 +50,25 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
 
         Stream<Path> directoryStream = Files.list(dir);
 
-
-        Stream<ArtifactMetaData> artifactMetaDataStream = Stream.empty();
-
-
         if (rgsEngineProperties.isEnableComponentsMetaData()) {
             artifactMetaDataService.getComponentsMetaData().stream()
                     .filter(artifactMetaData -> artifactMetaData.getType() == ArtifactMetaData.Type.ENGINE)
                     .forEach(artifactMetaData -> {
 
-//                        if (artifactMetaData.getType() != ArtifactMetaData.Type.ENGINE) {
-//                            if (!rgsServiceDiscovery.test(Path.of(dir.toAbsolutePath() + "/" + artifactMetaData.getName()).toFile(), artifactMetaData.getDigest(), null)) {
-//                                if (artifactMetaData.isCritical())
-//                                    throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "Critical component " + artifactMetaData.getName() + " failed!");
-//                            }
-//                        }
+                        // if (artifactMetaData.getType() != ArtifactMetaData.Type.ENGINE) {
+                        // if (!rgsServiceDiscovery.test(Path.of(dir.toAbsolutePath() + "/" +
+                        // artifactMetaData.getName()).toFile(), artifactMetaData.getDigest(), null)) {
+                        // if (artifactMetaData.isCritical())
+                        // throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "Critical
+                        // component " + artifactMetaData.getName() + " failed!");
+                        // }
+                        // }
                     });
         } else {
             directoryStream.map(path -> new ArtifactMetaData(path.toFile().getName(), ArtifactMetaData.Type.ENGINE))
                     .peek(artifactMetaData -> {
-                        GameEngineApplicationContext engineApplicationContext =
-                                new GameEngineApplicationContext(artifactMetaData, applicationContext, rgsServiceDiscovery);
+                        GameEngineApplicationContext engineApplicationContext = new GameEngineApplicationContext(
+                                artifactMetaData, applicationContext, rgsServiceDiscovery);
                         if (register)
                             engineApplicationContext.start();
 
@@ -78,25 +76,26 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
                     }).forEach(artifactMetaData -> {
                         log.debug("Loaded engine: {}", artifactMetaData.getName());
                     });
-            
+
             if (rgsServiceDiscovery.getGameEngineServices().isEmpty()) {
                 log.warn("Found no engines to load! {}", rgsEngineProperties);
             }
         }
-        
+
         directoryStream.close();
     }
-
 
     public void onApplicationEvent(LoadGameEngineEvent event) {
         try {
             load(event.isRegister());
-            applicationEventPublisher.publishEvent(new GameEnginesLoadedEvent(event.getSource(), event.getRefId(), "SUCCESS"));
+            applicationEventPublisher
+                    .publishEvent(new GameEnginesLoadedEvent(event.getSource(), event.getRefId(), "SUCCESS"));
             log.info("Game engines registered. reference id  {}", event.getRefId());
         } catch (Exception e) {
             log.error("", e);
             rgsServiceDiscovery.getGameEngineServices().clear();
-            applicationEventPublisher.publishEvent(new GameEnginesLoadedEvent(event.getSource(), event.getRefId(), "FAILED"));
+            applicationEventPublisher
+                    .publishEvent(new GameEnginesLoadedEvent(event.getSource(), event.getRefId(), "FAILED"));
         }
     }
 
@@ -113,8 +112,8 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
             GameEnginesLoadedEvent event = new GameEnginesLoadedEvent("ON_STARTUP", refId, "FAILED");
             rgsServiceDiscovery.getGameEngineServices().clear();
             applicationEventPublisher.publishEvent(event);
-            //int exitCode = SpringApplication.exit(applicationContext, () -> 0);
-            //System.exit(exitCode);
+            // int exitCode = SpringApplication.exit(applicationContext, () -> 0);
+            // System.exit(exitCode);
         }
     }
 }

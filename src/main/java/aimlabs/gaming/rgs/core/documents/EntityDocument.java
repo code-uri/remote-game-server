@@ -1,6 +1,5 @@
 package aimlabs.gaming.rgs.core.documents;
 
-
 import aimlabs.gaming.rgs.core.entity.BaseEntity;
 import aimlabs.gaming.rgs.core.entity.IEntity;
 import aimlabs.gaming.rgs.core.entity.Status;

@@ -12,7 +12,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +28,6 @@ import java.util.UUID;
 @RequestMapping("/games")
 public class GameInitiateController {
 
-
     @Autowired
     IPlayerService playerService;
 
@@ -41,7 +39,7 @@ public class GameInitiateController {
 
     @PostMapping("/init-session")
     Map<String, String> init(@RequestBody GameSessionRequest sessionRequest,
-                             HttpServletRequest httpServletRequest) {
+            HttpServletRequest httpServletRequest) {
 
         Brand brand = brandService.findOneByTenantAndBrand(TenantContextHolder.getTenant(),
                 sessionRequest.getBrand());
@@ -58,7 +56,8 @@ public class GameInitiateController {
         request.setToken(sessionRequest.getToken());
         request.setIpAddress(getRemoteIPAddress(httpServletRequest));
 
-        Player player = playerService.registerOrUpdate(brand.getNetwork(), brand.getUid(), sessionRequest.getPlayerId(), List.of());
+        Player player = playerService.registerOrUpdate(brand.getNetwork(), brand.getUid(), sessionRequest.getPlayerId(),
+                List.of());
 
         request.setPlayer(player.getUid());
         request.setToken(UUID.randomUUID().toString());
@@ -80,6 +79,7 @@ public class GameInitiateController {
         return remoteAddress;
     }
 
+    @SuppressWarnings("unused")
     private String getTenant(HttpServletRequest request) {
         String remoteHost = request.getHeader("X-Forwarded-Host");
         if (remoteHost == null)
@@ -93,4 +93,3 @@ public class GameInitiateController {
             return "default";
     }
 }
-

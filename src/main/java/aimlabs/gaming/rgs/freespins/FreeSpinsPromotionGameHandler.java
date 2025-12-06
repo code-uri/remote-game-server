@@ -4,7 +4,7 @@ import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.gamerounds.GameRound;
-import aimlabs.gaming.rgs.games.GameHandler;
+import aimlabs.gaming.rgs.games.GameFlowPipelineHandler;
 import aimlabs.gaming.rgs.games.GameInitializer;
 import aimlabs.gaming.rgs.games.GamePlayContext;
 import aimlabs.gaming.rgs.games.GamePlayResponse;
@@ -27,7 +27,7 @@ import java.util.Map;
 @Service
 @Order
 @Slf4j
-public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializer {
+public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, GameInitializer {
 
     static final Duration LOCK_DURATION = Duration.ofSeconds(10);
 
@@ -46,7 +46,7 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
     @Autowired
     RedisTemplate<String, Object> redisTemplate;
 
-    private GameHandler nextHandler;
+    private GameFlowPipelineHandler nextHandler;
 
     private static PromoBonus createPromoBonus(FreeSpinsAllotment freeSpinsAllotment) {
         PromoBonus promoBonus = new PromoBonus();
@@ -63,9 +63,9 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
     }
 
     public JsonNode loadDate(ObjectNode promotionResponse,
-                             GameSkin gameSkin,
-                             GameSession gameSession,
-                             Map<String, Object> settings) {
+            GameSkin gameSkin,
+            GameSession gameSession,
+            Map<String, Object> settings) {
         log.info("load permissions");
         FreeSpinsAllotment freeSpinsAllotment = freeSpinsIssueStore.findOneByGameAndPlayer(gameSkin.getUid(),
                 gameSession.getPlayer());
@@ -86,7 +86,8 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
         }
         if (promoBonus != null)
             return updatePromotionResponse(promotionResponse, promoBonus);
-        else return null;
+        else
+            return null;
     }
 
     private boolean isFreeSpinsIssueActive(FreeSpinsAllotmentDocument freeSpinsIssue) {
@@ -106,8 +107,8 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
     }
 
     private PromoBonus createPromoBonusFromSettings(Promotion promotion,
-                                                    GameSession gameSession,
-                                                    Map<String, Object> settings) {
+            GameSession gameSession,
+            Map<String, Object> settings) {
         PromoBonus promoBonus = new PromoBonus();
         promoBonus.setPromotionId(promotion.getId());
         promoBonus.setBetAmount(promotion.getBetAmounts().get(gameSession.getCurrency()));
@@ -128,17 +129,19 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
 
     private JsonNode updatePromotionResponse(ObjectNode promotionResponse, PromoBonus promoBonus) {
         String key = promoBonus.getFreeSpinsAllotmentId() != null ? "continueFreeSpins" : "claimFreeSpins";
-        return promotionResponse.set("promotionData", objectMapper.createObjectNode().set(key, objectMapper.valueToTree(promoBonus)));
+        return promotionResponse.set("promotionData",
+                objectMapper.createObjectNode().set(key, objectMapper.valueToTree(promoBonus)));
     }
 
     private void processFreeSpinsAllotment(GamePlayResponse gamePlayResponse, String freeSpinsAllotmentId,
-                                           GameSession gameSession,
-                                           GamePlayContext ctx) {
+            GameSession gameSession,
+            GamePlayContext ctx) {
         FreeSpinsAllotment freeSpinsAllotment = freeSpinsIssueStore.findOneByIdAndPlayerAndGame(freeSpinsAllotmentId,
                 gameSession.getPlayer(),
                 gameSession.getGame());
 
-        validateAndLockFreeSpins(gamePlayResponse, gameSession.getPlayer(), gameSession.getGame(), freeSpinsAllotment, ctx);
+        validateAndLockFreeSpins(gamePlayResponse, gameSession.getPlayer(), gameSession.getGame(), freeSpinsAllotment,
+                ctx);
 
         FreeSpinCampaign freeSpins = new FreeSpinCampaign();
         freeSpins.setCampaignUid(freeSpinsAllotment.getPromotionExternalRefId());
@@ -153,7 +156,6 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
         if (this.nextHandler != null)
             this.nextHandler.handle(ctx.getGamePlayRequest(), ctx);
 
-
         consumeFreeSpin(gamePlayResponse,
                 freeSpinsAllotment.getId(),
                 gameSession.getPlayer(),
@@ -161,10 +163,10 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
     }
 
     private void validateAndLockFreeSpins(GamePlayResponse gamePlayResponse,
-                                          String player,
-                                          String gameId,
-                                          FreeSpinsAllotment freeSpinsIssue,
-                                          GamePlayContext ctx) {
+            String player,
+            String gameId,
+            FreeSpinsAllotment freeSpinsIssue,
+            GamePlayContext ctx) {
         if (!gamePlayResponse.isContinueRound() && !isValidStake(gamePlayResponse, freeSpinsIssue, ctx)) {
             throw new BaseRuntimeException(SystemErrorCode.INVALID_STAKE);
         }
@@ -177,22 +179,25 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
 
     }
 
-    private boolean isValidStake(GamePlayResponse gamePlayResponse, FreeSpinsAllotment freeSpinsIssue, GamePlayContext ctx) {
+    private boolean isValidStake(GamePlayResponse gamePlayResponse, FreeSpinsAllotment freeSpinsIssue,
+            GamePlayContext ctx) {
         double totalWager = gamePlayResponse.getTotalWager();
         double betAmount = freeSpinsIssue.getBetAmount();
 
         if (ctx.getGamePlayRequest().get("noOfLines") != null) {
-            int payLines = freeSpinsIssue.getPayLines() != null ? freeSpinsIssue.getPayLines() : (ctx.getGamePlayRequest()).get("noOfLines").asInt();
+            int payLines = freeSpinsIssue.getPayLines() != null ? freeSpinsIssue.getPayLines()
+                    : (ctx.getGamePlayRequest()).get("noOfLines").asInt();
             log.info("payLines " + payLines + " betamount " + betAmount + "totalWager " + totalWager);
             return (freeSpinsIssue.getStatus() == Status.ACTIVE || freeSpinsIssue.getStatus() == Status.INPROGRESS) &&
-                   (payLines > 0 ? (betAmount * payLines) == totalWager : betAmount == totalWager);
-        } else return betAmount == totalWager;
+                    (payLines > 0 ? (betAmount * payLines) == totalWager : betAmount == totalWager);
+        } else
+            return betAmount == totalWager;
     }
 
     private void consumeFreeSpin(GamePlayResponse gamePlayResponse,
-                                 String freeSpinsIssueId,
-                                 String player,
-                                 String gameId) {
+            String freeSpinsIssueId,
+            String player,
+            String gameId) {
         FreeSpinsAllotment freeSpinsAllotment = freeSpinsIssueService.consumeFreeSpin(freeSpinsIssueId,
                 gamePlayResponse.getTotalWager(),
                 gamePlayResponse.getTotalWinnings(),
@@ -200,9 +205,8 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
 
         Object as = redisTemplate.opsForValue().getAndDelete(player + "-" + gameId);
 
-
         if (as != null) {
-            //TODO fix this
+            // TODO fix this
             // gamePlayResponse.setFreeSpinsAllotment(freeSpinsAllotment);
             gamePlayResponse.getGameRound()
                     .setPromoBonus(createPromoBonus(freeSpinsAllotment));
@@ -218,7 +222,7 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
         GameRound gameRound = ctx.getEngineResponse().getGameRound();
         log.info("{} ", ctx.getGamePlayRequest().has("freeSpinsAllotmentId"));
         if (ctx.getGamePlayRequest().has("freeSpinsAllotmentId")
-            || (gameRound != null && gameRound.getFreeSpinsAllotmentId() != null)) {
+                || (gameRound != null && gameRound.getFreeSpinsAllotmentId() != null)) {
 
             String freeSpinsAllotmentId;
             if (ctx.getGamePlayRequest().get("freeSpinsAllotmentId") != null)
@@ -235,7 +239,7 @@ public class FreeSpinsPromotionGameHandler implements GameHandler, GameInitializ
     }
 
     @Override
-    public void setNext(GameHandler nextHandler) {
+    public void setNext(GameFlowPipelineHandler nextHandler) {
         this.nextHandler = nextHandler;
     }
 
