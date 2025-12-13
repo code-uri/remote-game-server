@@ -1,0 +1,27 @@
+
+
+dependencies {
+    api platform("in.aimlabs.spring:spring-platform:$SPRING_PLATFORM_VERSION")
+    api "in.aimlabs.gaming:rgs-api:$RGS_API_VERSION"
+
+    api "javax.annotation:javax.annotation-api:$JAVAX_ANNOTATION_API_VERSION"
+    api "org.slf4j:slf4j-api"
+
+    compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    annotationProcessor "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    compileOnly "org.mapstruct:mapstruct:${MAPSTRUCT_VERSION}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:$MAPSTRUCT_VERSION"
+
+    testImplementation('org.junit.jupiter:junit-jupiter')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+compileJava {
+    options.compilerArgs << '-parameters'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}

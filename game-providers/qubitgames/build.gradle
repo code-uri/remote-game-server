@@ -1,0 +1,28 @@
+plugins {
+    id 'java-library'
+    id 'org.springframework.boot' version '3.5.5' apply false
+}
+
+apply plugin: 'io.spring.dependency-management'
+
+dependencyManagement {
+    imports {
+        mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+    }
+}
+
+dependencies {
+
+    implementation ('org.springframework:spring-web')
+    implementation 'org.springframework:spring-context'
+
+    implementation 'org.slf4j:slf4j-api'
+
+
+    implementation  project(':rgs-core')
+
+    compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    annotationProcessor "org.projectlombok:lombok:${LOMBOK_VERSION}"
+
+
+}

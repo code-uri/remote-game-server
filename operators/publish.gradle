@@ -1,0 +1,10 @@
+apply plugin: "java"
+apply plugin: "maven-publish"
+
+publishing {
+    publications {
+        libraries(MavenPublication) {
+            from components.java
+        }
+    }
+}

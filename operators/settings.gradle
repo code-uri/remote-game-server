@@ -1,0 +1,17 @@
+pluginManagement {
+    plugins {
+        id 'com.google.cloud.tools.jib' version '3.4.4'
+        id 'org.springframework.boot' version "3.3.0"
+        id 'pl.allegro.tech.build.axion-release' version "$AXION_RELEASE_VERSION"
+    }
+}
+
+include 'aggregator-service',
+            'bf-games',
+            'marvel',
+            'parimatch',
+            'reevo',
+            'slotegrator',
+            'softswiss',
+            'spinoro',
+            'platform'

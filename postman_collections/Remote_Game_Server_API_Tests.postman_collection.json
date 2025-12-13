@@ -1,0 +1,1451 @@
+{
+	"info": {
+		"_postman_id": "rgs-api-tests-2025",
+		"name": "Remote Game Server API Tests",
+		"description": "Comprehensive test collection for Remote Game Server APIs including Award Promotion, Get Promotion, Cancel Promotion, Claim Promotion, and Game Launch endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "clientId",
+			"value": "client_12345",
+			"type": "string"
+		},
+		{
+			"key": "clientKey",
+			"value": "key_abc123xyz",
+			"type": "string"
+		},
+		{
+			"key": "validToken",
+			"value": "valid_session_token_xyz123",
+			"type": "string"
+		},
+		{
+			"key": "promotionRefId",
+			"value": "PROMO_2025_001",
+			"type": "string"
+		},
+		{
+			"key": "promotionId",
+			"value": "promo_uuid_001",
+			"type": "string"
+		},
+		{
+			"key": "gameId",
+			"value": "slot_001",
+			"type": "string"
+		},
+		{
+			"key": "brand",
+			"value": "TestBrand",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Award Promotion API",
+			"item": [
+				{
+					"name": "TC_AWARD_PROMO_001 - Award Promotion Valid Data",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has promotionId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('promotionId');",
+									"    pm.environment.set('createdPromotionId', jsonData.promotionId);",
+									"});",
+									"",
+									"pm.test(\"Response has promotionRefId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.promotionRefId).to.eql('PROMO_2025_001');",
+									"});",
+									"",
+									"pm.test(\"Response has status ACTIVE\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('ACTIVE');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Client-ID",
+								"value": "{{clientId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Client-Key",
+								"value": "{{clientKey}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"promotionRefId\": \"PROMO_2025_001\",\n  \"gameProvider\": \"Pragmatic\",\n  \"brand\": \"TestBrand\",\n  \"player\": \"player123\",\n  \"games\": [\"slot_001\", \"slot_002\"],\n  \"playerTags\": [\"VIP\", \"HIGHROLLER\"],\n  \"promotionType\": \"FREE_SPINS\",\n  \"startDate\": \"2025-12-12T00:00:00Z\",\n  \"endDate\": \"2025-12-31T23:59:59Z\",\n  \"freeSpins\": 50,\n  \"payLines\": 10,\n  \"betAmounts\": {\n    \"USD\": 1.0,\n    \"EUR\": 0.9\n  },\n  \"status\": \"ACTIVE\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/award",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"award"
+							]
+						},
+						"description": "Test Case ID: TC_AWARD_PROMO_001\nVerify awarding promotion with valid data"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_AWARD_PROMO_002 - Missing Client ID Header",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 401\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 401]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Client-Key",
+								"value": "{{clientKey}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"promotionRefId\": \"PROMO_2025_002\",\n  \"gameProvider\": \"Pragmatic\",\n  \"brand\": \"TestBrand\",\n  \"player\": \"player123\",\n  \"promotionType\": \"FREE_SPINS\",\n  \"freeSpins\": 50\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/award",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"award"
+							]
+						},
+						"description": "Test Case ID: TC_AWARD_PROMO_002\nVerify awarding promotion with missing client ID header"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_AWARD_PROMO_003 - Invalid Client Credentials",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 401 or 403\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Client-ID",
+								"value": "invalid_client",
+								"type": "text"
+							},
+							{
+								"key": "X-Client-Key",
+								"value": "invalid_key",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"promotionRefId\": \"PROMO_2025_003\",\n  \"gameProvider\": \"Pragmatic\",\n  \"brand\": \"TestBrand\",\n  \"player\": \"player123\",\n  \"promotionType\": \"FREE_SPINS\",\n  \"freeSpins\": 50\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/award",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"award"
+							]
+						},
+						"description": "Test Case ID: TC_AWARD_PROMO_003\nVerify awarding promotion with invalid client credentials"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_AWARD_PROMO_004 - Duplicate Promotion Ref ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 409\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 409]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Client-ID",
+								"value": "{{clientId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Client-Key",
+								"value": "{{clientKey}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"promotionRefId\": \"PROMO_EXISTING_001\",\n  \"gameProvider\": \"Pragmatic\",\n  \"brand\": \"TestBrand\",\n  \"player\": \"player123\",\n  \"promotionType\": \"FREE_SPINS\",\n  \"freeSpins\": 50\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/award",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"award"
+							]
+						},
+						"description": "Test Case ID: TC_AWARD_PROMO_004\nVerify awarding promotion with duplicate promotion reference ID"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_AWARD_PROMO_005 - Missing Required Fields",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Client-ID",
+								"value": "{{clientId}}",
+								"type": "text"
+							},
+							{
+								"key": "X-Client-Key",
+								"value": "{{clientKey}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"promotionRefId\": \"PROMO_2025_005\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/award",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"award"
+							]
+						},
+						"description": "Test Case ID: TC_AWARD_PROMO_005\nVerify awarding promotion with missing required fields"
+					},
+					"response": []
+				}
+			],
+			"description": "Test cases for Award Promotion API endpoint"
+		},
+		{
+			"name": "2. Get Promotion API",
+			"item": [
+				{
+					"name": "TC_GET_PROMO_001 - Get Promotion Valid ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has promotionId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('promotionId');",
+									"});",
+									"",
+									"pm.test(\"Response has promotionRefId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.promotionRefId).to.eql('PROMO_2025_001');",
+									"});",
+									"",
+									"pm.test(\"Response has status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('status');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/{{promotionRefId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"{{promotionRefId}}"
+							]
+						},
+						"description": "Test Case ID: TC_GET_PROMO_001\nVerify retrieving promotion with valid promotion reference ID"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_GET_PROMO_002 - Non-existent Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+									"});",
+									"",
+									"pm.test(\"Error message contains 'not found'\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(JSON.stringify(jsonData).toLowerCase()).to.include('not found');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/PROMO_NONEXISTENT",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"PROMO_NONEXISTENT"
+							]
+						},
+						"description": "Test Case ID: TC_GET_PROMO_002\nVerify retrieving promotion with non-existent promotion reference ID"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_GET_PROMO_003 - Empty Promotion ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								""
+							]
+						},
+						"description": "Test Case ID: TC_GET_PROMO_003\nVerify retrieving promotion with empty promotion reference ID"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_GET_PROMO_004 - Get Cancelled Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Status is CANCELLED\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('CANCELLED');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/PROMO_CANCELLED_001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"PROMO_CANCELLED_001"
+							]
+						},
+						"description": "Test Case ID: TC_GET_PROMO_004\nVerify retrieving cancelled promotion"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_GET_PROMO_005 - Special Characters in ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has matching promotionRefId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.promotionRefId).to.include('PROMO_2025_');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/PROMO_2025_%23%40%21",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"PROMO_2025_%23%40%21"
+							]
+						},
+						"description": "Test Case ID: TC_GET_PROMO_005\nVerify retrieving promotion with special characters in reference ID (URL encoded)"
+					},
+					"response": []
+				}
+			],
+			"description": "Test cases for Get Promotion API endpoint"
+		},
+		{
+			"name": "3. Cancel Promotion API",
+			"item": [
+				{
+					"name": "TC_CANCEL_PROMO_001 - Cancel Valid Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has promotionId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('promotionId');",
+									"});",
+									"",
+									"pm.test(\"Status is CANCELLED\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('CANCELLED');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/{{promotionRefId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"{{promotionRefId}}"
+							]
+						},
+						"description": "Test Case ID: TC_CANCEL_PROMO_001\nVerify cancelling promotion with valid promotion reference ID"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CANCEL_PROMO_002 - Non-existent Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+									"});",
+									"",
+									"pm.test(\"Error message contains 'not found'\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(JSON.stringify(jsonData).toLowerCase()).to.include('not found');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/PROMO_NONEXISTENT",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"PROMO_NONEXISTENT"
+							]
+						},
+						"description": "Test Case ID: TC_CANCEL_PROMO_002\nVerify cancelling promotion with non-existent promotion reference ID"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CANCEL_PROMO_003 - Already Cancelled Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Status is CANCELLED\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql('CANCELLED');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/PROMO_CANCELLED_001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"PROMO_CANCELLED_001"
+							]
+						},
+						"description": "Test Case ID: TC_CANCEL_PROMO_003\nVerify cancelling already cancelled promotion (idempotent operation)"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CANCEL_PROMO_004 - Cancel Expired Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 400\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/PROMO_EXPIRED_001",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"PROMO_EXPIRED_001"
+							]
+						},
+						"description": "Test Case ID: TC_CANCEL_PROMO_004\nVerify cancelling expired promotion"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CANCEL_PROMO_005 - Empty Promotion ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								""
+							]
+						},
+						"description": "Test Case ID: TC_CANCEL_PROMO_005\nVerify cancelling promotion with empty reference ID"
+					},
+					"response": []
+				}
+			],
+			"description": "Test cases for Cancel Promotion API endpoint"
+		},
+		{
+			"name": "4. Claim Promotion API",
+			"item": [
+				{
+					"name": "TC_CLAIM_PROMO_001 - Claim Valid Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains FreeSpinsAllotment\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an('object');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{validToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/{{promotionId}}/claim",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"{{promotionId}}",
+								"claim"
+							]
+						},
+						"description": "Test Case ID: TC_CLAIM_PROMO_001\nVerify claiming promotion with valid promotion ID and game session"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CLAIM_PROMO_002 - Claim Without Session",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 401\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 401]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/{{promotionId}}/claim",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"{{promotionId}}",
+								"claim"
+							]
+						},
+						"description": "Test Case ID: TC_CLAIM_PROMO_002\nVerify claiming promotion without game session"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CLAIM_PROMO_003 - Claim Non-existent Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{validToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/promo_nonexistent/claim",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"promo_nonexistent",
+								"claim"
+							]
+						},
+						"description": "Test Case ID: TC_CLAIM_PROMO_003\nVerify claiming non-existent promotion"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CLAIM_PROMO_004 - Claim Already Claimed",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400 or 409\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([400, 409]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{validToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/{{promotionId}}/claim",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"{{promotionId}}",
+								"claim"
+							]
+						},
+						"description": "Test Case ID: TC_CLAIM_PROMO_004\nVerify claiming already claimed promotion (run after TC_CLAIM_PROMO_001)"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CLAIM_PROMO_005 - Claim Cancelled Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{validToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/promo_cancelled_001/claim",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"promo_cancelled_001",
+								"claim"
+							]
+						},
+						"description": "Test Case ID: TC_CLAIM_PROMO_005\nVerify claiming cancelled promotion"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_CLAIM_PROMO_006 - Claim Expired Promotion",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{validToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/promotions/promo_expired_001/claim",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"promotions",
+								"promo_expired_001",
+								"claim"
+							]
+						},
+						"description": "Test Case ID: TC_CLAIM_PROMO_006\nVerify claiming expired promotion"
+					},
+					"response": []
+				}
+			],
+			"description": "Test cases for Claim Promotion API endpoint"
+		},
+		{
+			"name": "5. Game Launch API",
+			"item": [
+				{
+					"name": "TC_LAUNCH_001 - Launch Game Valid Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 302\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 302]);",
+									"});",
+									"",
+									"pm.test(\"Response has Location header\", function () {",
+									"    pm.expect(pm.response.headers.has('Location')).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "User-Agent",
+								"value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}&brand={{brand}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_001\nVerify launching game with valid token and parameters"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_002 - Launch Game Invalid Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 401 or 403\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/invalid_token_12345?gameId={{gameId}}&brand={{brand}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"invalid_token_12345"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_002\nVerify launching game with invalid token"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_003 - Missing GameId Parameter",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?brand={{brand}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_003\nVerify launching game with missing required parameter (gameId)"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_004 - Missing Brand Parameter",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_004\nVerify launching game with missing required parameter (brand)"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_005 - Non-existent Game",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 404 or error returned\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([404, 400, 500]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId=nonexistent_game&brand={{brand}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "nonexistent_game"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_005\nVerify launching non-existent game"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_006 - EMBEDDED Launch Mode",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has Location header\", function () {",
+									"    pm.expect(pm.response.headers.has('Location')).to.be.true;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}&brand={{brand}}&mode=EMBEDDED",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								},
+								{
+									"key": "mode",
+									"value": "EMBEDDED"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_006\nVerify launching game with EMBEDDED launch mode"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_007 - JSON Launch Mode",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response body contains URL string\", function () {",
+									"    var body = pm.response.text();",
+									"    pm.expect(body).to.be.a('string');",
+									"    pm.expect(body).to.include('http');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}&brand={{brand}}&mode=JSON",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								},
+								{
+									"key": "mode",
+									"value": "JSON"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_007\nVerify launching game with JSON launch mode"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_008 - IP from X-Forwarded-For",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 302\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 302]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Forwarded-For",
+								"value": "192.168.1.100, 10.0.0.1",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}&brand={{brand}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_008\nVerify launching game captures correct IP address from X-Forwarded-For header"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_009 - Additional Query Parameters",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 302\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 302]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}&brand={{brand}}&locale=en_US&currency=USD&customParam=value123",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								},
+								{
+									"key": "locale",
+									"value": "en_US"
+								},
+								{
+									"key": "currency",
+									"value": "USD"
+								},
+								{
+									"key": "customParam",
+									"value": "value123"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_009\nVerify launching game with additional query parameters"
+					},
+					"response": []
+				},
+				{
+					"name": "TC_LAUNCH_010 - Referer Header Tracking",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 302\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 302]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Referer",
+								"value": "https://testbrand.com/casino/games",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/games/launch/{{validToken}}?gameId={{gameId}}&brand={{brand}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"games",
+								"launch",
+								"{{validToken}}"
+							],
+							"query": [
+								{
+									"key": "gameId",
+									"value": "{{gameId}}"
+								},
+								{
+									"key": "brand",
+									"value": "{{brand}}"
+								}
+							]
+						},
+						"description": "Test Case ID: TC_LAUNCH_010\nVerify launching game with Referer header for brand URL tracking"
+					},
+					"response": []
+				}
+			],
+			"description": "Test cases for Game Launch API endpoint"
+		}
+	]
+}

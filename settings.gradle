@@ -1,0 +1,18 @@
+
+
+pluginManagement {
+
+    plugins {
+        //id 'com.google.cloud.tools.jib' version '3.4.4'
+        id 'org.springframework.boot' version "${SPRING_BOOT_VERSION}"
+    }
+}
+
+rootProject.name = 'remote-game-server'
+
+include 'rgs-core'
+include 'server'
+
+include 'game-providers'
+include 'game-providers:mplaygames'
+include 'game-providers:qubitgames'

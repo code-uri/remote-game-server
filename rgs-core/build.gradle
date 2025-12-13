@@ -1,0 +1,41 @@
+plugins {
+    id 'java-library'
+    id 'org.springframework.boot' version '3.5.5' apply false
+}
+
+apply plugin: 'io.spring.dependency-management'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+    }
+}
+
+dependencies {
+    // Core Spring dependencies
+    api 'org.springframework:spring-context'
+    api 'org.springframework:spring-web'
+    api 'org.springframework.boot:spring-boot-starter-data-mongodb'
+
+    api "org.javamoney:moneta:1.4.5"
+    
+    // Logging
+    api 'org.slf4j:slf4j-api'
+    
+    api 'io.jsonwebtoken:jjwt-api:0.13.0'
+    // Lombok
+    compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    annotationProcessor "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    
+    compileOnly "org.mapstruct:mapstruct:${MAPSTRUCT_VERSION}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:$MAPSTRUCT_VERSION"
+    
+    // Jackson for JSON
+    api 'com.fasterxml.jackson.core:jackson-databind'
+}

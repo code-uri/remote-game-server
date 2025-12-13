@@ -1,0 +1,10 @@
+// Aggregate build file for game-providers
+// This ensures all submodules are built when building game-providers
+
+tasks.register('build') {
+    dependsOn subprojects.collect { it.tasks.named('build') }
+}
+
+tasks.register('clean') {
+    dependsOn subprojects.collect { it.tasks.named('clean') }
+}

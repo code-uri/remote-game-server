@@ -1,0 +1,26 @@
+plugins {
+    id 'java-platform'
+    id 'maven-publish'
+}
+
+dependencies {
+    constraints {
+        api  project(":aggregator-service")
+        api  project(":bf-games")
+        api  project(":marvel")
+        api  project(":parimatch")
+        api  project(":reevo")
+        api  project(":slotegrator")
+        api  project(":softswiss")
+        api  project(":spinoro")
+    }
+}
+
+
+publishing {
+    publications {
+        operatorsPlatform(MavenPublication) {
+            from components.javaPlatform
+        }
+    }
+}

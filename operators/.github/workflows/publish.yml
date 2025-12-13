@@ -1,0 +1,34 @@
+name: publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  setup:
+    uses: aimlabs/github-actions/.github/workflows/gradle-setup.yml@main
+    with:
+      java-version: '21'
+  build:
+    needs: setup  # This ensures 'setup' completes before 'build' starts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download init.gradle
+        uses: actions/download-artifact@v4
+        with:
+          name: gradle-init
+          path: ~/.gradle
+
+      - name: Grant execute permissions to Gradle wrapper
+        run: chmod +x ./gradlew
+
+      - name: Build & Publish
+        run: ./gradlew publish
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_KEY: ${{ secrets.GPR_KEY }}
