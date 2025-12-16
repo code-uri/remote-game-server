@@ -6,7 +6,7 @@ import aimlabs.gaming.rgs.core.AbstractEntityService;
 import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.networks.INetworkService;

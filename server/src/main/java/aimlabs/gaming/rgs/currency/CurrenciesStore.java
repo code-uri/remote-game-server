@@ -1,7 +1,7 @@
 package aimlabs.gaming.rgs.currency;
 
 import aimlabs.gaming.rgs.core.MongoEntityStore;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import lombok.Data;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;

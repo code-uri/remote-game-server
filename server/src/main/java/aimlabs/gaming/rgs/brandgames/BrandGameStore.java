@@ -4,7 +4,7 @@ import aimlabs.gaming.rgs.core.MongoEntityStore;
 import aimlabs.gaming.rgs.core.documents.EntityDocument;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.gameskins.GameSkinDocument;
 import aimlabs.gaming.rgs.gameskins.GameSkinStore;
 import lombok.Data;

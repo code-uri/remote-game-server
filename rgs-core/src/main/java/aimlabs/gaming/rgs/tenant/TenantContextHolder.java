@@ -1,4 +1,4 @@
-package aimlabs.gaming.rgs.games;
+package aimlabs.gaming.rgs.tenant;
 
 import lombok.Data;
 

@@ -6,7 +6,7 @@ import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.currency.ICurrencyService;
 import aimlabs.gaming.rgs.gameoperators.PlayerAccountManager;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.games.GamePlayResponse;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.gameskins.GameSkin;

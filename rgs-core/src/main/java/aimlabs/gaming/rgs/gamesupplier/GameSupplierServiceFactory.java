@@ -1,7 +1,6 @@
 package aimlabs.gaming.rgs.gamesupplier;
 
 import aimlabs.gaming.rgs.connectors.Connector;
-import aimlabs.gaming.rgs.gamesupplier.IGameSupplierService;
 
 public interface GameSupplierServiceFactory {
 

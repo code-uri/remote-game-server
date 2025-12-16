@@ -12,7 +12,9 @@ import java.net.URI;
 public interface IGameSupplierService {
 
     URI launchGame(GameLaunchRequest gameLaunchRequest, String player, String currency, GameSkin gameSkin,
-            String gameConfiguration, Brand brand, Connector connector);
+            String gameConfiguration, Brand brand);
+
+    Connector getConnector();        
 
     default URI replayGameRound(GameSession gameSession, String gameRound, GameSkin gameSkin, Brand brand) {
         throw new UnsupportedOperationException();

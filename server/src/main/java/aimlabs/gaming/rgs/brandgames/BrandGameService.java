@@ -3,7 +3,7 @@ package aimlabs.gaming.rgs.brandgames;
 import aimlabs.gaming.rgs.brands.IBrandService;
 import aimlabs.gaming.rgs.core.AbstractEntityService;
 import aimlabs.gaming.rgs.games.GamePlayContext;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.gameskins.GameSkinService;
 import lombok.Data;
 import org.bson.Document;

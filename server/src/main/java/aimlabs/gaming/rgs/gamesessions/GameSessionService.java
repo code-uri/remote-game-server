@@ -249,6 +249,24 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         return createGameSession(newSession);
     }
 
+    @Override
+    public GameSession createGameSessionForGameLaunchRequest(GameLaunchRequest glr, String player, String currency,
+            GameSkin gameSkin, String gameConfiguration, Brand brand, String tenant,
+            boolean alwaysNewSession) {
+
+        if (alwaysNewSession) {
+            return createGameSession(glr, player, currency, gameSkin, gameConfiguration, brand, tenant, null);
+        }
+
+        GameSession existingSession = findOneByToken(glr.getToken());
+        if (existingSession != null) {
+            return updatePartial(existingSession.getUid(),
+                    Map.of("game", gameSkin.getUid(), "providerGame", gameSkin.getProviderGame()));
+        }
+
+        return createGameSession(glr, player, currency, gameSkin, gameConfiguration, brand, tenant, null);
+    }
+
     public GameSession createGameSession(GameSession gameSession, String gameId, String player, String currency,
             String token) {
 

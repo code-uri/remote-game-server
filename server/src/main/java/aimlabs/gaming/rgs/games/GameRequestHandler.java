@@ -1,5 +1,30 @@
 package aimlabs.gaming.rgs.games;
 
+import static aimlabs.gaming.rgs.games.GamePlayResponse.GAME_CLIENT_RESPONSE;
+import static aimlabs.gaming.rgs.settings.GameSettingsService.isForceUnfinished;
+import static aimlabs.gaming.rgs.settings.GameSettingsService.isLockingPlayerRequired;
+
+import java.net.URI;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.util.Pair;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mongodb.DBObject;
+
 import aimlabs.gaming.rgs.brandgames.BrandGameAggregate;
 import aimlabs.gaming.rgs.brandgames.IBrandGameService;
 import aimlabs.gaming.rgs.brands.Brand;
@@ -19,6 +44,7 @@ import aimlabs.gaming.rgs.gamerounds.IGameRoundService;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.gamesessions.GameSessionContext;
 import aimlabs.gaming.rgs.gamesessions.GameSessionService;
+import aimlabs.gaming.rgs.gameskins.GameLaunchRequest;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.gamesupplier.IGameSupplierService;
@@ -26,31 +52,8 @@ import aimlabs.gaming.rgs.players.Player;
 import aimlabs.gaming.rgs.players.PlayerInfo;
 import aimlabs.gaming.rgs.players.PlayerService;
 import aimlabs.gaming.rgs.settings.GameSettingsService;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.mongodb.DBObject;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.util.Pair;
-import org.springframework.stereotype.Component;
-
-import java.net.URI;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static aimlabs.gaming.rgs.games.GamePlayResponse.GAME_CLIENT_RESPONSE;
-import static aimlabs.gaming.rgs.settings.GameSettingsService.isForceUnfinished;
-import static aimlabs.gaming.rgs.settings.GameSettingsService.isLockingPlayerRequired;
 
 @Data
 @Slf4j
@@ -93,7 +96,8 @@ public class GameRequestHandler {
     private GameEngineServiceAdaptor engineAdaptor;
 
     public URI launchGame(GameLaunchRequest launchRequest) {
-        BrandGameAggregate brandGame = brandGameService.findOneByNetworkAndBrandAndGameId(null, launchRequest.getBrand(), launchRequest.getGameId());
+        BrandGameAggregate brandGame = brandGameService.findOneByNetworkAndBrandAndGameId(null,
+                launchRequest.getBrand(), launchRequest.getGameId());
         if (brandGame == null) {
             throw new BaseRuntimeException(SystemErrorCode.INACTIVE_GAME);
         }
@@ -106,21 +110,41 @@ public class GameRequestHandler {
         gameSession.setDemo(launchRequest.isDemo());
         gameSession.setGameConnector(brandGame.game().getConnector());
 
-         return ScopedValue.where(
-                GameSessionContext.GAME_SESSION, gameSession
-        ).call(() -> getSupplier(brandGame.game().getConnector()).launchGame(launchRequest));
+        Player player;
+        if (!launchRequest.isDemo()) {
+            player = playerService.registerOrUpdate(brandGame.brand().getNetwork(), brandGame.brand().getUid(),
+                    launchRequest.getPlayer() == null ? launchRequest.getToken() : launchRequest.getPlayer(), null);
+        } else {
+            player = new Player();
+            player.setUid(launchRequest.getToken());
+            // player.setRealmType(brand.getRealmType());
+            player.setBrand(brandGame.brand().getUid());
+            player.setTenant(brandGame.brand().getTenant());
+            player.setCorrelationId(launchRequest.getToken());
+        }
+
+        return ScopedValue.where(
+                GameSessionContext.GAME_SESSION, gameSession)
+                .call(() -> {
+                    return getSupplier(brandGame.game().getConnector())
+                            .launchGame(launchRequest,
+                                    player.getUid(),
+                                    launchRequest.getCurrency(), brandGame.game(),
+                                    brandGame.game().getGameConfiguration(),
+                                    brandGame.brand());
+                });
     }
 
     private IGameSupplierService getSupplier(String connectorUid) {
         return getGameSupplierLocator().getSupplier(connectorUid);
-//                .getFirst().launchGame(launchRequest, tenantContextHolder);
     }
 
     public Pair<GameSession, JsonNode> initialiseGame(String token, String brandId, String gameId) {
-        //get brand and gameskin
+        // get brand and gameskin
         boolean isDemoGame = token.toLowerCase().startsWith("demo");
         GameSession gameSession = gameSessionService.findOneByToken(token);
-        BrandGameAggregate brandGame = brandGameService.findOneByNetworkAndBrandAndGameId(isDemoGame?"default":gameSession.getNetwork(),brandId, gameId);
+        BrandGameAggregate brandGame = brandGameService
+                .findOneByNetworkAndBrandAndGameId(isDemoGame ? "default" : gameSession.getNetwork(), brandId, gameId);
 
         String tenant = brandGame.brand().getTenant();
         Brand brand = brandGame.brand();
@@ -136,21 +160,19 @@ public class GameRequestHandler {
 
         GamePlayContext ctx = new GamePlayContext(gameSession, brandGame.brand(), brandGame.game());
 
-
-        
-        //load player
+        // load player
         Player player = playerService.findOneByUid(playerInfo.getPlayer());
 
         Map<String, Object> settings = gameSettingService.findGameSettingsForCurrency(tenant,
                 brandId,
                 gameSkin.getUid(), playerInfo.getWallet().getCurrency());
 
-
         String gameConfiguration = (String) settings.getOrDefault("gameConfiguration", gameSkin.getGameConfiguration());
 
         if (gameSession != null) {
             if (!gameConfiguration.equals(gameSession.getGameConfiguration()))
-                throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Invalid game session. Please re-launch the game.");
+                throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
+                        "Invalid game session. Please re-launch the game.");
 
             if (gameSession.isDemo()) {
                 gameSessionService.setExpiration(gameSession);
@@ -206,12 +228,11 @@ public class GameRequestHandler {
 
     }
 
-
     PlayerInfo initialisePlayer(String token,
-                                String playerId,
-                                String currency,
-                                Brand brand,
-                                GameSkin gameSkin) {
+            String playerId,
+            String currency,
+            Brand brand,
+            GameSkin gameSkin) {
         GameSession gameSession = gameSessionService.findOneByUid(token);
 
         if (gameSession != null) {
@@ -229,7 +250,8 @@ public class GameRequestHandler {
             if (player == null) {
                 throw new BaseRuntimeException(SystemErrorCode.PLAYER_NOT_FOUND);
             }
-            return playerService.initialise(player.getNetwork(), token, player.getCorrelationId(), gameSession.getCurrency(),
+            return playerService.initialise(player.getNetwork(), token, player.getCorrelationId(),
+                    gameSession.getCurrency(),
                     gameSession.getBrand(), gameSkin.getUid(), true);
         } else {
             return playerService.initialise(brand.getNetwork(), token, playerId, currency,
@@ -237,7 +259,6 @@ public class GameRequestHandler {
         }
 
     }
-
 
     public JsonNode playGame(GameSession gameSession, JsonNode requestJsonNode) {
 
@@ -249,14 +270,13 @@ public class GameRequestHandler {
         if (brandGame == null)
             throw new BaseRuntimeException(SystemErrorCode.GAME_COMING_SOON);
 
-        //BrandGameAggregate brandGame = tuple2.getT1();
+        // BrandGameAggregate brandGame = tuple2.getT1();
         boolean continueReq = requestJsonNode.has("gameRound");
         if (brandGame.status() == Status.INACTIVE && !continueReq) {
             throw new BaseRuntimeException(SystemErrorCode.GAME_COMING_SOON);
         }
 
         String gameActivityUid = UUID.randomUUID().toString();
-
 
         Map<String, Object> settings = gameSettingService.findGameSettingsForCurrency(gameSession.getTenant(),
                 gameSession.getBrand(),
@@ -279,15 +299,17 @@ public class GameRequestHandler {
         return asd;
     }
 
-
-    private void preChecks(GameSession gameSession, GameSkin gameSkin, JsonNode requestJsonNode, Map<String, Object> settings) {
+    private void preChecks(GameSession gameSession, GameSkin gameSkin, JsonNode requestJsonNode,
+            Map<String, Object> settings) {
         boolean continueReq = requestJsonNode.has("gameRound");
         boolean forceUnfinished = isForceUnfinished(settings);
         if (forceUnfinished && !continueReq) {
             // force unfinished game
-            Boolean pendingRoundExists = gameRoundStore.isPendingRoundExists(gameSession.getPlayer(), gameSkin.getUid());
+            Boolean pendingRoundExists = gameRoundStore.isPendingRoundExists(gameSession.getPlayer(),
+                    gameSkin.getUid());
             if (pendingRoundExists) {
-                throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Unfinished game round exists. Please continue the game.");
+                throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
+                        "Unfinished game round exists. Please continue the game.");
             }
         }
 
@@ -296,7 +318,6 @@ public class GameRequestHandler {
             acquireLockOnPlayerAndGame(gameSession.getPlayer(), gameSkin.getUid());
         }
     }
-
 
     public JsonNode ack(GameSession gameSession, String gameRoundUid, JsonNode requestJsonNode) {
 
@@ -312,7 +333,8 @@ public class GameRequestHandler {
         String gameActivityUid = requestJsonNode.get("gameActivity").asText();
         JsonNode gamePlayJsonNode = gamePlayService.findGamePlay(gameRound.getGamePlay());
         JsonNode gameActivityJsonNode = gamePlayService.findGameActivity(gameActivityUid);
-        ObjectNode ackResponse = gamePlayService.ackGamePlay(gameSkin, requestJsonNode, gamePlayJsonNode, gameActivityJsonNode);
+        ObjectNode ackResponse = gamePlayService.ackGamePlay(gameSkin, requestJsonNode, gamePlayJsonNode,
+                gameActivityJsonNode);
         gamePlayService.updateAckResponse(gameActivityUid, ackResponse);
         return ackResponse;
     }
@@ -340,19 +362,22 @@ public class GameRequestHandler {
         return gamePlayDbObject;
     }
 
-   /* protected Mono<GameMapDocument> saveGameMapForGamePlay(GameMapDocument gameMapDocument) {
-        //Query query = query(where("gameUid").is(gameMapDocument.getGameUid()).and("playerUid").is(gameMapDocument.getPlayerUid()));
-        return gameMapStore.updateByUid(gameMapDocument.getUid(),
-                Map.of("gameUid", gameMapDocument.getGameUid(),
-                        "playerUid", gameMapDocument.getPlayerUid(),
-                        "gamePlayUid", gameMapDocument.getGamePlayUid(),
-                        "modifiedOn", new Date()),
-                true);
-    }*/
-
+    /*
+     * protected Mono<GameMapDocument> saveGameMapForGamePlay(GameMapDocument
+     * gameMapDocument) {
+     * //Query query =
+     * query(where("gameUid").is(gameMapDocument.getGameUid()).and("playerUid").is(
+     * gameMapDocument.getPlayerUid()));
+     * return gameMapStore.updateByUid(gameMapDocument.getUid(),
+     * Map.of("gameUid", gameMapDocument.getGameUid(),
+     * "playerUid", gameMapDocument.getPlayerUid(),
+     * "gamePlayUid", gameMapDocument.getGamePlayUid(),
+     * "modifiedOn", new Date()),
+     * true);
+     * }
+     */
 
     public JsonNode gameRoundDetails(GameRound gameRound) {
-
 
         Query playerQuery = Query.query(Criteria.where("uid").is(gameRound.getPlayer()));
         playerQuery.fields().include("correlationId");
@@ -372,10 +397,10 @@ public class GameRequestHandler {
         ((ObjectNode) gamePlayJsonNode).remove("_id");
 
         ObjectNode gameRoundJsonNode = null;
-        //log.info("game round  {} to object node", gameRound.getUid());
+        // log.info("game round {} to object node", gameRound.getUid());
         try {
             String as = getObjectMapper().writer().writeValueAsString(gameRound);
-            //log.info("game round json {}", as);
+            // log.info("game round json {}", as);
             gameRoundJsonNode = (ObjectNode) getObjectMapper().reader().readTree(as);
         } catch (JsonProcessingException e) {
             throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, e.getMessage());
@@ -383,7 +408,7 @@ public class GameRequestHandler {
 
         gameRoundJsonNode.remove("id");
         gameRoundJsonNode.remove("transactions");
-        //gameRoundJsonNode.set("gamePlay", gamePlayJsonNode);
+        // gameRoundJsonNode.set("gamePlay", gamePlayJsonNode);
         gameRoundJsonNode.put("session", (String) gameSession.getToken());
 
         gameRoundJsonNode.put("player", gameRound.isDemo()
@@ -396,27 +421,24 @@ public class GameRequestHandler {
     public JsonNode gamePlayAndActivityDetails(GameRound gameRound) {
         JsonNode gameRoundDetailsJsonNode = gameRoundDetails(gameRound);
 
-
         if (gameRound.getGamePlay() != null) {
             JsonNode gamePlay = gameRoundDetailsJsonNode.get("gamePlay");
             List<DBObject> gameActivityList = gameActivityStore.findAllByGamePlay(gameRound.getGamePlay());
 
             ArrayNode gameActivityArrayNode = gameActivityList.stream().map(activityDbObject -> {
 
-                        JsonNode gameActivityJsonNode;
-                        try {
-                            gameActivityJsonNode = objectMapper.readTree(objectMapper.writeValueAsString(activityDbObject));
-                        } catch (JsonProcessingException e) {
-                            throw new RuntimeException(e);
-                        }
+                JsonNode gameActivityJsonNode;
+                try {
+                    gameActivityJsonNode = objectMapper.readTree(objectMapper.writeValueAsString(activityDbObject));
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
 
-
-                        JsonNode streakCounterJsonNode = gameActivityJsonNode.get("streakCounter");
-                        log.info("streakCounterJsonNode {}", streakCounterJsonNode);
-                        return gameActivityJsonNode;
-                    })
+                JsonNode streakCounterJsonNode = gameActivityJsonNode.get("streakCounter");
+                log.info("streakCounterJsonNode {}", streakCounterJsonNode);
+                return gameActivityJsonNode;
+            })
                     .collect(() -> objectMapper.createArrayNode(), ArrayNode::add, ArrayNode::addAll);
-
 
             ((ObjectNode) gameRoundDetailsJsonNode).set("gameActivities", gameActivityArrayNode);
 
@@ -439,7 +461,8 @@ public class GameRequestHandler {
                 .setIfAbsent(player + "-" + game, true, Duration.ofSeconds(10));
 
         if (Boolean.FALSE.equals(acquired))
-            throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Another game request is being processed. Please try again later.");
+            throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
+                    "Another game request is being processed. Please try again later.");
         return acquired;
     }
 
@@ -449,7 +472,6 @@ public class GameRequestHandler {
 
     }
 
-
     public JsonNode composeGameResponse(GamePlayResponse gamePlayResponse) {
         ObjectNode response = objectMapper.createObjectNode();
         GameRound gameRound = gamePlayResponse.getGameRound();
@@ -457,16 +479,21 @@ public class GameRequestHandler {
             response.put("uid", gameRound.getUid());
             response.put("status", gameRound.getStatus().name());
             response.set("totalWager", objectMapper.createObjectNode().put("amount",
-                            gameRound.getTotalWager().getNumber().doubleValue())
+                    gameRound.getTotalWager().getNumber().doubleValue())
                     .put("currency", gameRound.getTotalWager().getCurrency().getCurrencyCode()));
 
             response.set("totalWin", objectMapper.createObjectNode().put("amount",
-                            gamePlayResponse.getTotalWinnings())
+                    gamePlayResponse.getTotalWinnings())
                     .put("currency", gameRound.getTotalWager().getCurrency().getCurrencyCode()));
 
-            /*if(gameRound.getJackpotDetails()!=null && gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency().isPositive()){
-                response.set("jackpotDetails", getObjectMapper().valueToTree(gameRound.getJackpotDetails()));
-            }*/
+            /*
+             * if(gameRound.getJackpotDetails()!=null &&
+             * gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency().
+             * isPositive()){
+             * response.set("jackpotDetails",
+             * getObjectMapper().valueToTree(gameRound.getJackpotDetails()));
+             * }
+             */
 
             if (gameRound.getPromoBonus() != null) {
                 response.set("promoBonus", objectMapper.valueToTree(gameRound.getPromoBonus()));
@@ -476,17 +503,23 @@ public class GameRequestHandler {
             response.set("wallet", objectMapper.valueToTree(gamePlayResponse.getPlayerWallet()));
 
         if (gamePlayResponse.getEngineResponse().has("gameClientResponse")) {
-            // response.set(GAME_PLAY, engineResponse.get(GAME_CLIENT_RESPONSE).get(GAME_PLAY));
-            //response.set(GAME_ACTIVITY, engineResponse.get(GAME_CLIENT_RESPONSE).get(GAME_ACTIVITY));
+            // response.set(GAME_PLAY,
+            // engineResponse.get(GAME_CLIENT_RESPONSE).get(GAME_PLAY));
+            // response.set(GAME_ACTIVITY,
+            // engineResponse.get(GAME_CLIENT_RESPONSE).get(GAME_ACTIVITY));
             response.set(GAME_CLIENT_RESPONSE, gamePlayResponse.getEngineResponse().get(GAME_CLIENT_RESPONSE));
         } else {
             response.set("gamePlay", gamePlayResponse.getGamePlay());
             response.set("gameActivity", gamePlayResponse.getGameActivity());
         }
-/*
-        if (gamePlayResponse.getStreakDisplayInfo() != null && !gamePlayResponse.getStreakDisplayInfo().isEmpty()) {
-            response.set("promotionData", objectMapper.createObjectNode().set("streakInfo", gamePlayResponse.getStreakDisplayInfo()));
-        }*/
+        /*
+         * if (gamePlayResponse.getStreakDisplayInfo() != null &&
+         * !gamePlayResponse.getStreakDisplayInfo().isEmpty()) {
+         * response.set("promotionData",
+         * objectMapper.createObjectNode().set("streakInfo",
+         * gamePlayResponse.getStreakDisplayInfo()));
+         * }
+         */
         if (gamePlayResponse.getPromoBonus() != null) {
             ObjectNode promoBonus = objectMapper.createObjectNode().set("promoBonus",
                     objectMapper.valueToTree(gamePlayResponse.getPromoBonus()));
@@ -496,10 +529,8 @@ public class GameRequestHandler {
                 response.set("promotionData", promoBonus);
         }
 
-
         return response;
     }
-
 
     public SearchResponse<JsonNode> history(SearchRequest searchRequest) {
 
@@ -530,7 +561,7 @@ public class GameRequestHandler {
         Brand brand = brandService.findOneByUid(gameRound.getBrand());
 
         return gameSupplierLocator.getSupplier(gameSkin.getConnector())
-                .replayGameRound(gameSession, gameRound, gameSkin, brand);
+                .replayGameRound(gameSession, gameRound.getCorrelationId(), gameSkin, brand);
     }
 
     public JsonNode replayGameRoundInitialiseGame(String gameRoundId) {
@@ -539,20 +570,20 @@ public class GameRequestHandler {
         if (gameRound == null || Status.COMPLETED.equals(gameRound.getStatus()))
             throw new BaseRuntimeException(SystemErrorCode.INVALID_GAME_ROUND, "Invalid game round for replay");
 
-
         GameSession gameSession = gameSessionService.findOneByUid(gameRound.getSession());
 
         ObjectNode config = engineAdaptor
                 .getGameClientConfig(gameSession.getGameConfiguration());
 
         ObjectNode response = objectMapper.createObjectNode();
-        config = config.set("minMax", objectMapper.createArrayNode().add(gameRound.getTotalWager().getNumber().doubleValueExact()).add(1000));
+        config = config.set("minMax",
+                objectMapper.createArrayNode().add(gameRound.getTotalWager().getNumber().doubleValueExact()).add(1000));
         config = config.put("defaultStake", gameRound.getTotalWager().getNumber().doubleValueExact());
-        config = config.set("ladder", objectMapper.createArrayNode().add(gameRound.getTotalWager().getNumber().doubleValueExact()));
+        config = config.set("ladder",
+                objectMapper.createArrayNode().add(gameRound.getTotalWager().getNumber().doubleValueExact()));
 
         ObjectNode finalConfig = config;
         JsonNode gameRoundWithGamePlayAndGameActivityJsonNode = gamePlayAndActivityDetails(gameRound);
-
 
         response.set("config", finalConfig);
         response.set("gameRoundDetails", gameRoundWithGamePlayAndGameActivityJsonNode);

@@ -2,7 +2,7 @@
 package aimlabs.gaming.rgs.currency;
 
 import aimlabs.gaming.rgs.core.AbstractEntityService;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.javamoney.moneta.CurrencyUnitBuilder;

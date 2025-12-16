@@ -2,7 +2,7 @@ package aimlabs.gaming.rgs.gameplay;
 
 import aimlabs.gaming.rgs.core.MongoEntityStore;
 import aimlabs.gaming.rgs.core.entity.Status;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import lombok.Data;

@@ -44,4 +44,7 @@ public interface IGameSessionService extends IEntityService<GameSession> {
     GameSession findOneByUidAcrossTenants(String uid);
 
     GameSession findOneByTokenAndUpdateGame(String externalToken, String gameId, String gameConfiguration);
+
+    GameSession createGameSessionForGameLaunchRequest(GameLaunchRequest glr, String player, String currency, GameSkin gameSkin,
+            String gameConfiguration, Brand brand, String tenant, boolean alwaysNewSession);
 }

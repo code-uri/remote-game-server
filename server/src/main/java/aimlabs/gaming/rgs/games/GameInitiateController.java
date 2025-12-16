@@ -8,6 +8,7 @@ import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.gamesessions.IGameSessionService;
 import aimlabs.gaming.rgs.players.IPlayerService;
 import aimlabs.gaming.rgs.players.Player;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;

@@ -1,7 +1,7 @@
 package aimlabs.gaming.rgs.networks;
 
 import aimlabs.gaming.rgs.core.AbstractEntityService;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.query.Criteria;

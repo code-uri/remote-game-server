@@ -4,7 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import aimlabs.gaming.rgs.core.entity.BaseDto;
 import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.core.MongoEntityStore;
 import aimlabs.gaming.rgs.core.AbstractEntityService;
 import lombok.extern.slf4j.Slf4j;

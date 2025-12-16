@@ -1,7 +1,7 @@
 package aimlabs.gaming.rgs.permissions;
 
 import aimlabs.gaming.rgs.core.MongoEntityStore;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Component;

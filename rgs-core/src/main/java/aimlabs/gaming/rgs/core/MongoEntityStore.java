@@ -8,7 +8,7 @@ import aimlabs.gaming.rgs.core.dto.SortOrder;
 import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.core.utils.LogUtil;
 import aimlabs.gaming.rgs.core.utils.ObjectUtil;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import com.mongodb.bulk.BulkWriteResult;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.result.UpdateResult;

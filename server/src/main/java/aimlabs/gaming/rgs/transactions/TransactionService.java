@@ -11,7 +11,7 @@ import aimlabs.gaming.rgs.gameoperators.PlayerTransactionResponse;
 import aimlabs.gaming.rgs.gamerounds.GameRound;
 import aimlabs.gaming.rgs.gamerounds.GameRoundStatusEnum;
 import aimlabs.gaming.rgs.gamerounds.GameRoundStore;
-import aimlabs.gaming.rgs.games.TenantContextHolder;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.players.IPlayerService;
 import aimlabs.gaming.rgs.players.Player;

@@ -1,31 +1,28 @@
 package aimlabs.gaming.rgs.gamesupplier;
 
-import aimlabs.gaming.rgs.brandgames.BrandGameAggregate;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriUtils;
+
 import aimlabs.gaming.rgs.brandgames.IBrandGameService;
 import aimlabs.gaming.rgs.brands.Brand;
 import aimlabs.gaming.rgs.connectors.Connector;
 import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import aimlabs.gaming.rgs.gamerounds.GameRound;
 import aimlabs.gaming.rgs.gamerounds.IGameRoundService;
-import aimlabs.gaming.rgs.gameskins.GameLaunchRequest;
-import aimlabs.gaming.rgs.games.GameSupplierServiceFactory;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.gamesessions.IGameSessionService;
+import aimlabs.gaming.rgs.gameskins.GameLaunchRequest;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.players.IPlayerService;
 import aimlabs.gaming.rgs.players.PlayerInfo;
 import aimlabs.gaming.rgs.settings.GameSettingsService;
 import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.web.util.UriUtils;
-
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 @Service
 @Slf4j
@@ -61,41 +58,48 @@ public class DefaultGameSupplierFactory implements GameSupplierServiceFactory {
 
     @Override
     public IGameSupplierService getInstance(Connector connector) {
-        return new DefaultGameSupplier();
+        return new DefaultGameSupplier(connector);
     }
 
     public class DefaultGameSupplier implements IGameSupplierService {
 
-        @Override
-        public URI launchGame(GameLaunchRequest glr) {
+        private final Connector connector;
 
-            PlayerInfo playerInfo = playerService.initialise(glr.getNetwork(),
+        DefaultGameSupplier(Connector connector) {
+            this.connector = connector;
+        }
+
+        @Override
+        public URI launchGame(GameLaunchRequest glr,
+                                    String player,
+                                    String currency,
+                                    GameSkin gameSkin,
+                                    String gameConfiguration,
+                                    Brand brand) {
+
+            PlayerInfo playerInfo = playerService.initialise(brand.getNetwork(),
                     glr.getToken(),
                     null,
                     glr.getCurrency(),
-                    glr.getBrand(),
-                    glr.getGameId(),
+                    brand.getUid(),
+                    gameSkin.getUid(),
                     true);
 
-            BrandGameAggregate brandGameAggregate = brandGameService.findOneByNetworkAndBrandAndGameId(glr.getNetwork(),
-                    glr.getBrand(), glr.getGameId());
-            Brand brand = brandGameAggregate.brand();
-            GameSkin game = brandGameAggregate.game();
 
-            Map<String, Object> settings = gameSettingsService.findGameSettingsForCurrency(game.getTenant(),
+            Map<String, Object> settings = gameSettingsService.findGameSettingsForCurrency(gameSkin.getTenant(),
                     brand.getUid(),
-                    game.getUid(),
+                    gameSkin.getUid(),
                     playerInfo.getWallet().getCurrency());
 
             Boolean unfinishedGameExists = gameRoundService.isUnfinishedGameRoundExists(playerInfo.getUid(),
                     glr.getGameId());
 
-            if (!unfinishedGameExists && brandGameAggregate.status() == Status.INACTIVE) {
+            if (!unfinishedGameExists && brand.getStatus() == Status.INACTIVE) {
                 throw new BaseRuntimeException(SystemErrorCode.INACTIVE_GAME);
             }
 
             String gc = (String) settings.getOrDefault("gameConfiguration",
-                    brandGameAggregate.game().getGameConfiguration());
+                    gameSkin.getGameConfiguration());
 
             GameSession gameSession = gameSessionService.findOneByToken(glr.getToken());
 
@@ -103,21 +107,21 @@ public class DefaultGameSupplierFactory implements GameSupplierServiceFactory {
                 gameSession = gameSessionService.createGameSession(glr,
                         playerInfo.getUid(),
                         playerInfo.getWallet().getCurrency(),
-                        brandGameAggregate.game(),
+                        gameSkin,
                         gc,
-                        brandGameAggregate.brand(),
-                        game.getTenant(),
+                        brand,
+                        gameSkin.getTenant(),
                         null);
             } else {
                 gameSession = gameSessionService.updatePartial(gameSession.getUid(), Map.of("game", glr.getGameId(),
-                        "gameConfiguration", brandGameAggregate.game().getGameConfiguration()));
+                        "gameConfiguration", gameSkin.getGameConfiguration()));
             }
 
             // glr.setGameId(gameSkin.getName());
 
             return URI.create(
-                    (brandGameAggregate.game().getUrl() == null ? "http://localhost:8080/games/mr-roboto/index.html"
-                            : brandGameAggregate.game().getUrl()) +
+                    (gameSkin.getUrl() == null ? "http://localhost:8080/games/mr-roboto/index.html"
+                            : gameSkin.getUrl()) +
                             "?token=" + gameSession.getUid() +
                             "&brand=" + glr.getBrand() +
                             "&lang=" + glr.getLanguage() +
@@ -129,13 +133,19 @@ public class DefaultGameSupplierFactory implements GameSupplierServiceFactory {
         }
 
         @Override
-        public URI replayGameRound(GameSession gameSession, GameRound gameRound, GameSkin gameSkin, Brand brand) {
+        public URI replayGameRound(GameSession gameSession, String gameRound, GameSkin gameSkin, Brand brand) {
 
             return URI.create(gameSkin.getUrl() +
-                    "?gameRound=" + gameRound.getUid() +
-                    "&game=" + gameRound.getGameId() +
+                    "?gameRound=" + gameRound +
+                    "&game=" + gameSession.getProviderGame() +
                     "&brand=" + brand.getUid() +
                     "&preview=true");
+        }
+
+
+        @Override
+        public Connector getConnector() {
+            return this.connector;
         }
 
     }
