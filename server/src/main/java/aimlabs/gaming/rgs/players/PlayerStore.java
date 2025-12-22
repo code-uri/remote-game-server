@@ -14,11 +14,13 @@ import org.springframework.stereotype.Service;
 public class PlayerStore extends MongoEntityStore<PlayerDocument> {
 
 
-    public PlayerDocument findOneByNetworkAndCorrelationId(String network, String correlationId) {
+    public Player findOneByNetworkAndBrandAndCorrelationId(String network, String brand,  String correlationId) {
 
         return getTemplate().findOne(Query.query(Criteria.where("tenant").is(TenantContextHolder.getTenant())
-                .and("network").is(network).and("correlationId").is(correlationId)
-                .and("deleted").is(false)), PlayerDocument.class);
+                .and("network").is(network)
+                .and("brand").is(brand)
+                .and("correlationId").is(correlationId)
+                .and("deleted").is(false)), Player.class);
 
     }
 

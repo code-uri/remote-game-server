@@ -9,6 +9,20 @@
             "name": "AppServerTest",
             "request": "launch",
             "mainClass": "AppServerTest",
+            "projectName": "server"
+        },
+        {
+            "type": "java",
+            "name": "RemoteGameServer",
+            "request": "launch",
+            "mainClass": "aimlabs.gaming.rgs.RemoteGameServer",
+            "projectName": "server"
+        },
+        {
+            "type": "java",
+            "name": "AppServerTest",
+            "request": "launch",
+            "mainClass": "AppServerTest",
             "projectName": "remote-game-server",
             "preLaunchTask": "gradle: build"
         }

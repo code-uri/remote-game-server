@@ -1,10 +1,12 @@
 
 import aimlabs.gaming.rgs.RemoteGameServer;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
 
 
+@SpringBootTest
 public class AppServerTest extends AbstractGamesTest {
 
     public static void main(String args[]) {

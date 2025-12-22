@@ -30,6 +30,7 @@ public enum SystemErrorCode implements ErrorCode {
     USER_NOT_FOUND("USER_NOT_FOUND","USER_NOT_FOUND",400),
     USER_ALREADY_REGISTERED("user.already.registered","User already registered", 400),
     INVALID_PROMOTION_REFERENCE("invalid.promotion.reference","invalid promotion reference", 400),
+    PLAYER_REQUIRED_IN_REQUEST("player.required","player required in the request", 400),
     INVALID_FREE_SPINS_REQUEST("invalid.freespins.request","invalid freespins request", 400),
     FREE_SPINS_ALREADY_CLAIMED("freespins.already.claimed","Free spins already claimed", 400),
     FREE_SPINS_CLAIM_ROLLBACK_FAILED("freespins.claim.rollback.failed","freespins claim rollback failed", 500),

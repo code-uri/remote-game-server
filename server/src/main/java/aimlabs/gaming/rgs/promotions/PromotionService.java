@@ -6,6 +6,7 @@ import aimlabs.gaming.rgs.core.AbstractEntityService;
 import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
+import aimlabs.gaming.rgs.freespins.FreeSpinsPromotionRequest;
 import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
@@ -20,6 +21,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -56,6 +58,12 @@ public class PromotionService extends AbstractEntityService<Promotion, Promotion
     }
 
     public Promotion award(FreeSpinsPromotionRequest fspReq) {
+         if(fspReq.getPlayer()==null || CollectionUtils.isEmpty(fspReq.getPlayerTags())){
+            throw new BaseRuntimeException(SystemErrorCode.PLAYER_REQUIRED_IN_REQUEST);
+        }
+        else if(fspReq.getFreeSpins()==null){
+            throw new BaseRuntimeException(SystemErrorCode.INVALID_FREE_SPINS_REQUEST, "freeSpins not found!");
+        }
         if(!StringUtils.hasLength(fspReq.getPromotionRefId())){
             throw new BaseRuntimeException(SystemErrorCode.INVALID_PROMOTION_REFERENCE, "promotionRefId not found!");
         }
@@ -75,18 +83,15 @@ public class PromotionService extends AbstractEntityService<Promotion, Promotion
 
         if ((fspReq.getBrand() == null && fspReq.getPlayer() == null) ) {
             throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "player or brand not provided.");
-        }
+        }        
 
-
-        Player player = null;
-        if(fspReq.getPlayer()!=null) {
-            player = playerService.findPlayerByNetworkAndCorrelationId(network.getUid(), fspReq.getPlayer());
+        Player player = playerService.findByCorrelationidAndNetworkAndBrand(network.getUid(), fspReq.getBrand(), fspReq.getPlayer());
             if (player == null)
                 player = playerService.create(new Player(network.getTenant(), network.getUid(),
                         fspReq.getPlayer(),
                         fspReq.getBrand(),
                         fspReq.getPlayerTags()));
-        }
+        
         List<String> games = gameSkinService.findAllByUidIn(fspReq.getGames())
         .stream().map(gameSkin -> {
             if (fspReq.getPayLines() != null && gameSkin.getPayLines() != null
@@ -119,11 +124,7 @@ public class PromotionService extends AbstractEntityService<Promotion, Promotion
         promotion.setStatus(Status.ACTIVE);
         promotion.setBrand(fspReq.getBrand());
         promotion.setNetwork(network.getUid());
-
-        if(player!=null) {
-            promotion.setPlayer(player.getUid());
-
-        }
+        promotion.setPlayer(player.getUid());
         Promotion promotion1 = findByNetworkAndPromotionRefId(promotion.getPlayer(), promotion.getPromotionRefId());
 
         if(promotion1==null)

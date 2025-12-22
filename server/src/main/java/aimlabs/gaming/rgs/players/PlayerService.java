@@ -1,6 +1,5 @@
 package aimlabs.gaming.rgs.players;
 
-
 import aimlabs.gaming.rgs.brands.IBrandService;
 import aimlabs.gaming.rgs.core.AbstractEntityService;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
@@ -19,6 +18,7 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Data
@@ -45,14 +45,17 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
     PlayerAccountManager demoPlayerServiceAdapter;
 
     @Override
-    public Player registerOrUpdate(Player player) {
-        Player existingPlayer = findPlayerByNetworkAndCorrelationId(player.getNetwork(), player.getCorrelationId());
+    public Player saveOrUpdate(Player player) {
+        Player existingPlayer = findByCorrelationidAndNetworkAndBrand(player.getNetwork(), player.getBrand(), player.getCorrelationId());
         if(existingPlayer == null)
             return super.create(player);
+        else if(player.getTags()!=null){
+                existingPlayer.setTags(player.getTags());
+                return super.updatePartial(existingPlayer.getUid(), Map.of("tags", player.getTags()));
+        }
         else
-            return super.update(existingPlayer);
+            return existingPlayer;
     }
-
 
     public PlayerWallet getBalance(GameSession playerSession, String player) {
         PlayerBalanceRequest playerBalanceRequest = new PlayerBalanceRequest();
@@ -67,52 +70,56 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
             return PlayerWalletUtils.asPlayerWallet(as);
         }
 
-
         return PlayerWalletUtils.asPlayerWallet(playerAccountManager.playerBalance(playerBalanceRequest));
     }
 
-    public Player findPlayerByNetworkAndCorrelationId(String network, String correlationId) {
-        return getMapper().asDto(store.findOneByNetworkAndCorrelationId(network, correlationId));
+    public Player findByCorrelationidAndNetworkAndBrand(String network, String brand, String correlationId) {
+        return store.findOneByNetworkAndBrandAndCorrelationId(network, brand, correlationId);
     }
-
 
     public Player findOneByUid(String uid) {
         return getMapper().asDto(this.getStore().findOneByUid(uid));
 
     }
 
-
-/*    public GameSession createPlayerSession(GameSession playerSessionRequest, Brand brand) {
-        Player player = new Player();
-        player.setCorrelationId(playerSessionRequest.getPlayer());
-        player.setNetwork(brand.getNetwork());
-        //player.setRealmType(brand.getRealmType());
-        player.setTenant(playerSessionRequest.getTenant());
-        player.setBrand(playerSessionRequest.getBrand());
-        player.setTags(playerSessionRequest.getPlayerTags());
-        if (!playerSessionRequest.isDemo()) {
-            return registerOrUpdate(player)
-                    .flatMap(playerSaved -> {
-                        playerSessionRequest.setPlayer(playerSaved.getUid());
-                        playerSessionRequest.setToken(UUID.randomUUID().toString());
-                        return gameSessionService.createGameSession(playerSessionRequest);
-                    });
-        } else {
-            return gameSessionService.createGameSession(playerSessionRequest);
-        }
-    }*/
+    /*
+     * public GameSession createPlayerSession(GameSession playerSessionRequest,
+     * Brand brand) {
+     * Player player = new Player();
+     * player.setCorrelationId(playerSessionRequest.getPlayer());
+     * player.setNetwork(brand.getNetwork());
+     * //player.setRealmType(brand.getRealmType());
+     * player.setTenant(playerSessionRequest.getTenant());
+     * player.setBrand(playerSessionRequest.getBrand());
+     * player.setTags(playerSessionRequest.getPlayerTags());
+     * if (!playerSessionRequest.isDemo()) {
+     * return registerOrUpdate(player)
+     * .flatMap(playerSaved -> {
+     * playerSessionRequest.setPlayer(playerSaved.getUid());
+     * playerSessionRequest.setToken(UUID.randomUUID().toString());
+     * return gameSessionService.createGameSession(playerSessionRequest);
+     * });
+     * } else {
+     * return gameSessionService.createGameSession(playerSessionRequest);
+     * }
+     * }
+     */
 
     @Override
-    public PlayerInfo initialise(String network, String token, String playerCorrelationId, String currency, String brand,
-                                 String gameId, boolean newSessionPerGameLaunch) {
+    public PlayerInfo initialise(String network, String token, String playerCorrelationId, String currency,
+            String brand,
+            String gameId, boolean newSessionPerGameLaunch) {
 
         boolean demo = token != null && token.toLowerCase().startsWith("demo");
 
-        //createToken is used for initialise call from game supplier context.
-        // will be using externalSession for checking the validity of the player from aggregator context.
-        //String createToken = gameSupplierToken!=null?gameSupplierToken :externalToken;
+        // createToken is used for initialise call from game supplier context.
+        // will be using externalSession for checking the validity of the player from
+        // aggregator context.
+        // String createToken = gameSupplierToken!=null?gameSupplierToken
+        // :externalToken;
 
-        //String playerExternalToken = aggregatorGameSession!=null?aggregatorGameSession.getToken():externalToken;
+        // String playerExternalToken =
+        // aggregatorGameSession!=null?aggregatorGameSession.getToken():externalToken;
         PlayerInfo playerInfo = new PlayerInfo();
         try {
             String tenant = TenantContextHolder.getTenant();
@@ -124,31 +131,30 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
             initialiseRequest.setSessionToken(token);
             initialiseRequest.setPlayer(playerCorrelationId);
             initialiseRequest.setCurrency(currency);
-            //return  getBalance(gameSession, player, gameId)
+            // return getBalance(gameSession, player, gameId)
             PlayerInitialiseResponse playerInitialiseResponse;
             if (demo)
                 playerInitialiseResponse = demoPlayerServiceAdapter.playerInitialise(initialiseRequest);
             else
                 playerInitialiseResponse = playerAccountManager.playerInitialise(initialiseRequest);
 
-
-            //info.setUid(player.getUid());
+            // info.setUid(player.getUid());
             playerInfo.setPlayer(playerInitialiseResponse.getPlayerId());
             playerInfo.setExternalToken(playerInitialiseResponse.getExternalToken() != null
-                    ? playerInitialiseResponse.getExternalToken() : token);
+                    ? playerInitialiseResponse.getExternalToken()
+                    : token);
             playerInfo.setWallet(PlayerWalletUtils
                     .asPlayerWallet(playerInitialiseResponse.getWallet()));
             playerInfo.setTags(playerInitialiseResponse.getTags());
             playerInfo.setSupportsMultiCredits(playerInitialiseResponse.isSupportsMultiCredits());
 
             if (!demo) {
-                Player player = new Player();
-                player.setNetwork(network);
-                player.setBrand(brand);
-                player.setTenant(tenant);
-                player.setCorrelationId(playerInfo.getPlayer() != null ? playerInfo.getPlayer() : playerInfo.getExternalToken());
-                player.setTags(playerInfo.getTags());
-                player = registerOrUpdate(player);
+
+                String correlationId = (playerInfo.getPlayer() != null ? playerInfo.getPlayer()
+                        : playerInfo.getExternalToken());
+
+                Player player = findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(network, brand, correlationId,
+                        playerInfo.getTags());
 
                 playerInfo.setUid(player.getUid());
                 return playerInfo;
@@ -171,25 +177,28 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
         }
     }
 
-   /* public Player findOneByUidAcrossTenants(String partnerUserId) {
-        return getStore().getTemplate().findOne(Query.query(Criteria.where("uid").is(partnerUserId).and("deleted").is(false)),  PlayerDocument.class).map(mapper::asDto);
-    }*/
+    /*
+     * public Player findOneByUidAcrossTenants(String partnerUserId) {
+     * return getStore().getTemplate().findOne(Query.query(Criteria.where("uid").is(
+     * partnerUserId).and("deleted").is(false)),
+     * PlayerDocument.class).map(mapper::asDto);
+     * }
+     */
 
     public List<Player> findPlayerByTags(String tenant, List<String> playerTags) {
         return getStore().getTemplate().find(Query.query(Criteria.where("tenant").is(tenant)
-                        .and("deleted").is(false).and("tags").in(playerTags)), PlayerDocument.class)
+                .and("deleted").is(false).and("tags").in(playerTags)), PlayerDocument.class)
                 .stream().map(e -> getMapper().asDto(e)).toList();
     }
 
-
-    public Player registerOrUpdate(String network, String brand, String correlationId, List<String> tags) {
-
+    public Player findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(String network, String brand,
+            String correlationId, List<String> tags) {
         Player player = new Player();
         player.setNetwork(network);
         player.setBrand(brand);
         player.setTenant(TenantContextHolder.getTenant());
         player.setCorrelationId(correlationId);
         player.setTags(tags);
-        return registerOrUpdate(player);
+        return saveOrUpdate(player);
     }
 }

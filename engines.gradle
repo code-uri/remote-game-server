@@ -1,0 +1,74 @@
+ext {
+    // Set a default environment if none is provided
+    environment = project.hasProperty('env') ? project.env : 'stage'
+
+    def tag = findProperty('deployment_tag')
+    if(tag !=null && tag.toString().length()>0)
+        deployment_tag =  tag
+    else
+        deployment_tag = 'latest'
+
+    println ( "Deployment >>>>>>>>>>  tag: $deployment_tag" )
+
+}
+
+
+configurations {
+    engine {
+        transitive = false
+    }
+}
+
+def unzippedDir = "$buildDir/libs/engines"
+
+// task copyEngines(type: Copy) {
+//     description 'Copying engine fat jars.'
+
+//     from {
+//         configurations.engine.copy().files { !(it instanceof ProjectDependency) }.flatten().unique()
+//     }
+//     into unzippedDir
+// }
+
+
+task copyEngines(type: Copy) {
+    description 'Copying engine fat jars.'
+    from(configurations.engine)   // copies the resolved artifacts
+    into unzippedDir
+}
+
+dependencies {
+    engine "in.aimlabs.gaming.engine:game-engine-lithium:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-hydrogen:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-helium:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-carbon:$ALL_ENGINES_VERSION:all"
+
+    engine "in.aimlabs.gaming.engine:game-engine-nitrogen:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-oxygen:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-beryllium:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-boron:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-neon:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-sodium:$ALL_ENGINES_VERSION:all"
+
+    engine "in.aimlabs.gaming.engine:game-engine-teenpatti-express:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-teenpatti-champion:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-andar-bahar:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-double-up:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-jhandi-munda:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-dragon-tiger:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-matka:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-sicbo:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-blackjack:$ENGINE_BLACKJACK_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-roulette:$ENGINE_ROULETTE_VERSION:all"
+
+    engine "in.aimlabs.gaming.engine:game-engine-ludo-express:$ALL_ENGINES_VERSION:all"
+    engine "in.aimlabs.gaming.engine:game-engine-snakes-and-ladders:$ALL_ENGINES_VERSION:all"
+    //engines
+
+
+    if (environment == 'stage') {
+        //forced results dependencies
+        engine ("in.aimlabs.gaming.engine:game-engine-slots-forcedresults:$ALL_ENGINES_VERSION")
+        engine ("in.aimlabs.gaming.engine:game-engine-table-forced-results:$ENGINE_BLACKJACK_VERSION")
+    }
+}

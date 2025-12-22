@@ -8,6 +8,8 @@ apply plugin: 'io.spring.dependency-management'
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
+apply from: "../engines.gradle"
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)

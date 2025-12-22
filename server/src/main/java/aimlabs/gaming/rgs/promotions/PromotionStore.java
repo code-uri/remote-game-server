@@ -30,7 +30,7 @@ class PromotionStore extends MongoEntityStore<PromotionDocument> {
                                        // .and("network").is(gameSession.getNetwork())
                                         .and("games").is(game)
                                         .and("brand").is(gameSession.getBrand())
-                                        .and("player").in(gameSession.getPlayer(), null)
+                                        .and("player").in(gameSession.getPlayer())
                                         .and("status").is(Status.ACTIVE)
                                         //.and("streak").is(true)
                                         .and("endDate").gte(new Date())

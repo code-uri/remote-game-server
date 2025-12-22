@@ -218,7 +218,8 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
 
                     return playerService.findOneByUid(gameSession.getPlayer())
                             .flatMap(player -> {
-                                return playerService.initialise(player.getNetwork(), gameSession.getUid(),
+                                return playerService.initialise(player.getNetwork(),
+                                        gameSession.getUid(),
                                         gameSession.getToken(),
                                         gameSession.getPlayer(),
                                         player.getCorrelationId(),

@@ -57,7 +57,7 @@ public class GameInitiateController {
         request.setToken(sessionRequest.getToken());
         request.setIpAddress(getRemoteIPAddress(httpServletRequest));
 
-        Player player = playerService.registerOrUpdate(brand.getNetwork(), brand.getUid(), sessionRequest.getPlayerId(),
+        Player player = playerService.findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(brand.getNetwork(), brand.getUid(), sessionRequest.getPlayerId(),
                 List.of());
 
         request.setPlayer(player.getUid());

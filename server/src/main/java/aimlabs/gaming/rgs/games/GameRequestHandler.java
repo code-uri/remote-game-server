@@ -112,7 +112,7 @@ public class GameRequestHandler {
 
         Player player;
         if (!launchRequest.isDemo()) {
-            player = playerService.registerOrUpdate(brandGame.brand().getNetwork(), brandGame.brand().getUid(),
+            player = playerService.findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(brandGame.brand().getNetwork(), brandGame.brand().getUid(),
                     launchRequest.getPlayer() == null ? launchRequest.getToken() : launchRequest.getPlayer(), null);
         } else {
             player = new Player();

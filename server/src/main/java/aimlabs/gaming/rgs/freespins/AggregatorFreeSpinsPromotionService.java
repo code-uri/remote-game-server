@@ -11,8 +11,6 @@ import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.gamesupplier.IGameSupplierService;
 import aimlabs.gaming.rgs.promotions.IPromotionService;
 import aimlabs.gaming.rgs.promotions.Promotion;
-import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionRequest;
-import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
