@@ -1,11 +1,12 @@
 package aimlabs.gaming.rgs.cache.aspect;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
+
 import aimlabs.gaming.rgs.core.entity.BaseDto;
 import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
 import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.core.MongoEntityStore;
+import aimlabs.gaming.rgs.cache.EntityCacheManager;
+import aimlabs.gaming.rgs.cache.EntityCacheManager.CacheKey;
 import aimlabs.gaming.rgs.core.AbstractEntityService;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,7 +28,6 @@ import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -45,19 +45,13 @@ public class CacheEntitiesImplAspect implements ApplicationContextAware, Command
     @Autowired(required = false)
     RedisMessageListenerContainer redisMessageListenerContainer;
 
+    @Autowired
+    EntityCacheManager entityCacheManager;
+
     public static final String INVALIDATE_CACHED_ENTITY = "invalidate-cached-entity";
 
     Set<String> watchedNameSpaces = new HashSet<>();
-    Cache<String, BaseDto> cachedEntityByIdMap = Caffeine.newBuilder()
-            .initialCapacity(100)
-            // .maximumSize(500)
-            .expireAfterAccess(Duration.ofMinutes(10)).build();
-
-    Cache<String, CacheKey> cacheKeyMap = Caffeine.newBuilder()
-            .initialCapacity(100)
-            // .maximumSize(500)
-            .expireAfterAccess(Duration.ofMinutes(10)).build();
-
+    
     @Value("${spring.data.mongodb.database:rgsdb}")
     private String currentDataBase;
 
@@ -94,10 +88,10 @@ public class CacheEntitiesImplAspect implements ApplicationContextAware, Command
         MessageListener refreshListener = (Message message, byte[] pattern) -> {
             try {
                 log.info("received refresh-cache event");
-                log.info("cache stats before {}", cachedEntityByIdMap.stats());
-                cachedEntityByIdMap.invalidateAll();
-                cacheKeyMap.invalidateAll();
-                log.info("cache stats after {}", cachedEntityByIdMap.stats());
+                log.info("cache stats before {}", entityCacheManager.getStats());
+                entityCacheManager.getCachedEntityEntries().clear();
+                entityCacheManager.getCacheKeyEntries().clear();
+                log.info("cache stats after {}", entityCacheManager.getStats());
             } catch (Exception e) {
                 log.error("Error processing refresh message", e);
             }
@@ -108,29 +102,6 @@ public class CacheEntitiesImplAspect implements ApplicationContextAware, Command
         redisMessageListenerContainer.addMessageListener(refreshListener, new ChannelTopic("refresh-cache"));
 
         log.info("Redis message listeners configured for cache invalidation and refresh");
-    }
-
-    static class CacheKey {
-        String key;
-
-        String id;
-
-        CacheKey(String key) {
-            this.key = key;
-        }
-
-        public CacheKey(String key, String id) {
-            this.key = key;
-            this.id = id;
-        }
-
-        @Override
-        public String toString() {
-            return new StringJoiner(", ", CacheKey.class.getSimpleName() + "[", "]")
-                    .add("key='" + key + "'")
-                    .add("id='" + id + "'")
-                    .toString();
-        }
     }
 
     @Pointcut("@annotation(aimlabs.gaming.rgs.core.annotations.Cacheable)")
@@ -160,22 +131,21 @@ public class CacheEntitiesImplAspect implements ApplicationContextAware, Command
             String key = tenant + "-" + namespace + "-" + pjp.getSignature().getName() + "-" +
                     Arrays.stream(pjp.getArgs()).sequential().map(o -> (String) o).collect(Collectors.joining("-"));
 
-            CacheKey cacheKey = cacheKeyMap.getIfPresent(key);
+            CacheKey cacheKey = entityCacheManager.getCacheKey(key).orElse(null);
 
-            if (cacheKey != null && cachedEntityByIdMap.asMap().containsKey(cacheKey.id)) {
+            if (cacheKey != null && entityCacheManager.getCachedEntityEntries().containsKey(cacheKey.id)) {
                 log.info("Served from cache({}).", key);
-                return cachedEntityByIdMap.asMap().get(cacheKey.id);
+                return entityCacheManager.getCachedEntityEntries().get(cacheKey.id);
             }
 
             log.info("Cache Miss. key {}.", key);
             Object result = pjp.proceed();
 
-            if (result instanceof BaseDto) {
-                BaseDto dto = (BaseDto) result;
-                CacheKey newKey = new CacheKey(key, dto.getId());
-                log.info("Cached key {}.", newKey);
-                cachedEntityByIdMap.put(dto.getId(), dto);
-                cacheKeyMap.put(key, newKey);
+            if (result instanceof BaseDto baseDto) {
+                EntityCacheManager.CacheKey newCacheKey = new EntityCacheManager.CacheKey(key, ((BaseDto) result).getId());
+                log.info("Cached key {}.", newCacheKey);
+                entityCacheManager.putCachedEntity(baseDto.getId(), baseDto);
+                entityCacheManager.putCacheKey(key, newCacheKey);
                 log.info("Cached({}).", key);
             }
 
@@ -201,11 +171,6 @@ public class CacheEntitiesImplAspect implements ApplicationContextAware, Command
     }
 
     private void invalidateCacheUsingId(String id) {
-        cachedEntityByIdMap.invalidate(id);
-        Optional<CacheKey> cacheKeyOptional = cacheKeyMap.asMap().values().stream()
-                .filter(cacheKey -> cacheKey.id.equals(id))
-                .findAny();
-        log.info("invalidating cache with key {}", cacheKeyOptional);
-        cacheKeyOptional.ifPresent(cacheKey -> cacheKeyMap.invalidate(cacheKey.key));
+         entityCacheManager.invalidateById(id);
     }
 }

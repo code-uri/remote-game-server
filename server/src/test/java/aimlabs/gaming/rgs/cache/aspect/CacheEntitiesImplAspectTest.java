@@ -1,10 +1,10 @@
 package aimlabs.gaming.rgs.cache.aspect;
 
+import aimlabs.gaming.rgs.cache.EntityCacheManager;
 import aimlabs.gaming.rgs.core.AbstractEntityService;
 import aimlabs.gaming.rgs.core.MongoEntityStore;
 import aimlabs.gaming.rgs.core.entity.BaseDto;
 import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
-import com.github.benmanes.caffeine.cache.Cache;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.Signature;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,8 +23,6 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.lang.reflect.Field;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -41,10 +39,10 @@ class CacheEntitiesImplAspectTest {
     private Signature signature;
 
     @Mock
-    private AbstractEntityService<BaseDto, String> entityService;
+    private AbstractEntityService entityService;
 
     @Mock
-    private MongoEntityStore<BaseDto> store;
+    private MongoEntityStore store;
 
     @Mock
     private ApplicationContext applicationContext;
@@ -56,19 +54,23 @@ class CacheEntitiesImplAspectTest {
     private RedisTemplate<String, Object> redisTemplate;
 
     @Mock
-    private RedisSerializer<Object> valueSerializer;
+    private RedisSerializer valueSerializer;
 
     private CacheEntitiesImplAspect aspect;
+
+    private EntityCacheManager entityCacheManager;
 
     private TestDto testDto;
 
     @BeforeEach
     void setUp() {
         aspect = new CacheEntitiesImplAspect();
+        entityCacheManager = new EntityCacheManager();
         aspect.setApplicationContext(applicationContext);
         ReflectionTestUtils.setField(aspect, "currentDataBase", "testdb");
         ReflectionTestUtils.setField(aspect, "redisTemplate", redisTemplate);
         ReflectionTestUtils.setField(aspect, "redisMessageListenerContainer", listenerContainer);
+        ReflectionTestUtils.setField(aspect, "entityCacheManager", entityCacheManager);
 
         testDto = new TestDto("test-id-123", "Test Entity");
     }
@@ -107,6 +109,7 @@ class CacheEntitiesImplAspectTest {
         // Given
         Object nonServiceTarget = new Object();
         when(pjp.getTarget()).thenReturn(nonServiceTarget);
+        when(pjp.getArgs()).thenReturn(new Object[] {});
         when(pjp.proceed()).thenReturn("result");
 
         // When
@@ -167,9 +170,7 @@ class CacheEntitiesImplAspectTest {
         verify(pjp, times(1)).proceed();
 
         // Verify cache is empty
-        Cache<String, BaseDto> cache = (Cache<String, BaseDto>) ReflectionTestUtils.getField(aspect,
-                "cachedEntityByIdMap");
-        assertEquals(0, cache.asMap().size());
+        assertEquals(0, entityCacheManager.getCachedEntityEntries().size());
     }
 
     @Test
@@ -187,16 +188,14 @@ class CacheEntitiesImplAspectTest {
         aspect.cacheEntities(pjp);
 
         // Verify cache has entry
-        Cache<String, BaseDto> cache = (Cache<String, BaseDto>) ReflectionTestUtils.getField(aspect,
-                "cachedEntityByIdMap");
-        assertEquals(1, cache.asMap().size());
+        assertEquals(1, entityCacheManager.getCachedEntityEntries().size());
 
         // When - Cache bust
         when(pjp.proceed()).thenReturn(testDto);
         aspect.cacheBust(pjp);
 
         // Then - Cache should be invalidated
-        assertEquals(0, cache.asMap().size());
+        assertEquals(0, entityCacheManager.getCachedEntityEntries().size());
         verify(applicationContext, times(1)).publishEvent(any(EntityUpdateEvent.class));
     }
 
@@ -233,15 +232,13 @@ class CacheEntitiesImplAspectTest {
 
         aspect.cacheEntities(pjp);
 
-        Cache<String, BaseDto> cache = (Cache<String, BaseDto>) ReflectionTestUtils.getField(aspect,
-                "cachedEntityByIdMap");
-        assertEquals(1, cache.asMap().size());
+        assertEquals(1, entityCacheManager.getCachedEntityEntries().size());
 
         // When - Invalidate using private method via reflection
         aspect.cacheBust(pjp);
 
         // Then
-        assertEquals(0, cache.asMap().size());
+        assertEquals(0, entityCacheManager.getCachedEntityEntries().size());
     }
 
     @Test
@@ -254,25 +251,26 @@ class CacheEntitiesImplAspectTest {
         aspect.run();
 
         // Then
-        verify(listenerContainer, never()).addMessageListener(any(), any());
+        verify(listenerContainer, never()).addMessageListener(
+            any(org.springframework.data.redis.connection.MessageListener.class),
+            any(org.springframework.data.redis.listener.Topic.class));
     }
 
     @Test
     @DisplayName("Should setup Redis listeners when configured")
     void testRun_ShouldSetupListeners() throws Exception {
-        // Given
-        when(redisTemplate.getValueSerializer()).thenReturn(valueSerializer);
-
         // When
         aspect.run();
 
         // Then
-        verify(listenerContainer, times(2)).addMessageListener(any(), any(ChannelTopic.class));
+        verify(listenerContainer, times(2)).addMessageListener(
+            any(org.springframework.data.redis.connection.MessageListener.class),
+            any(org.springframework.data.redis.listener.Topic.class));
     }
 
     @Test
     @DisplayName("Should handle invalidate message and invalidate cache")
-    void testRedisInvalidateListener_ShouldInvalidateCache() throws Exception {
+    void testRedisInvalidateListener_ShouldInvalidateCache() throws Throwable {
         // Given - Populate cache first
         when(pjp.getTarget()).thenReturn(entityService);
         when(pjp.getArgs()).thenReturn(new Object[] { "param1" });
@@ -280,16 +278,14 @@ class CacheEntitiesImplAspectTest {
         when(signature.getName()).thenReturn("findById");
         when(entityService.getStore()).thenReturn(store);
         when(store.getDocumentClass()).thenReturn((Class) TestDto.class);
-        when(pjp.proceed()).thenReturn(testDto);
+        doReturn(testDto).when(pjp).proceed();
 
         aspect.cacheEntities(pjp);
 
-        Cache<String, BaseDto> cache = (Cache<String, BaseDto>) ReflectionTestUtils.getField(aspect,
-                "cachedEntityByIdMap");
-        assertEquals(1, cache.asMap().size());
+        assertEquals(1, entityCacheManager.getCachedEntityEntries().size());
 
         // Setup Redis listener
-        when(redisTemplate.getValueSerializer()).thenReturn(valueSerializer);
+        doReturn(valueSerializer).when(redisTemplate).getValueSerializer();
         ArgumentCaptor<org.springframework.data.redis.connection.MessageListener> listenerCaptor = ArgumentCaptor
                 .forClass(org.springframework.data.redis.connection.MessageListener.class);
 
@@ -305,13 +301,13 @@ class CacheEntitiesImplAspectTest {
         listenerCaptor.getAllValues().get(0).onMessage(message, null);
 
         // Then
-        assertEquals(0, cache.asMap().size());
+        assertEquals(0, entityCacheManager.getCachedEntityEntries().size());
         verify(applicationContext, times(1)).publishEvent(any(EntityUpdateEvent.class));
     }
 
     @Test
     @DisplayName("Should handle refresh message and clear all caches")
-    void testRedisRefreshListener_ShouldClearAllCaches() throws Exception {
+    void testRedisRefreshListener_ShouldClearAllCaches() throws Throwable {
         // Given - Populate cache
         when(pjp.getTarget()).thenReturn(entityService);
         when(pjp.getArgs()).thenReturn(new Object[] { "param1" });
@@ -319,16 +315,13 @@ class CacheEntitiesImplAspectTest {
         when(signature.getName()).thenReturn("findById");
         when(entityService.getStore()).thenReturn(store);
         when(store.getDocumentClass()).thenReturn((Class) TestDto.class);
-        when(pjp.proceed()).thenReturn(testDto);
+        doReturn(testDto).when(pjp).proceed();
 
         aspect.cacheEntities(pjp);
 
-        Cache<String, BaseDto> cache = (Cache<String, BaseDto>) ReflectionTestUtils.getField(aspect,
-                "cachedEntityByIdMap");
-        assertEquals(1, cache.asMap().size());
+        assertEquals(1, entityCacheManager.getCachedEntityEntries().size());
 
         // Setup Redis listener
-        when(redisTemplate.getValueSerializer()).thenReturn(valueSerializer);
         ArgumentCaptor<org.springframework.data.redis.connection.MessageListener> listenerCaptor = ArgumentCaptor
                 .forClass(org.springframework.data.redis.connection.MessageListener.class);
 
@@ -341,7 +334,7 @@ class CacheEntitiesImplAspectTest {
         listenerCaptor.getAllValues().get(1).onMessage(message, null);
 
         // Then
-        assertEquals(0, cache.asMap().size());
+        assertEquals(0, entityCacheManager.getCachedEntityEntries().size());
     }
 
     @Test
@@ -360,19 +353,16 @@ class CacheEntitiesImplAspectTest {
         aspect.cacheEntities(pjp);
 
         // Then
-        Cache<String, CacheEntitiesImplAspect.CacheKey> cacheKeyMap = (Cache<String, CacheEntitiesImplAspect.CacheKey>) ReflectionTestUtils
-                .getField(aspect, "cacheKeyMap");
-
-        assertEquals(1, cacheKeyMap.asMap().size());
+        assertEquals(1, entityCacheManager.getCacheKeyEntries().size());
         String expectedKeyPattern = "default-testdb.test_collection-findByTwoParams-param1-param2";
-        assertTrue(cacheKeyMap.asMap().containsKey(expectedKeyPattern));
+        assertTrue(entityCacheManager.getCacheKeyEntries().containsKey(expectedKeyPattern));
     }
 
     @Test
     @DisplayName("CacheKey toString should format correctly")
     void testCacheKeyToString() {
         // Given
-        CacheEntitiesImplAspect.CacheKey cacheKey = new CacheEntitiesImplAspect.CacheKey("test-key", "test-id");
+        EntityCacheManager.CacheKey cacheKey = new EntityCacheManager.CacheKey("test-key", "test-id");
 
         // When
         String result = cacheKey.toString();

@@ -44,7 +44,14 @@ public class MongoEntityStore<E extends EntityDocument> implements IEntityStore<
     @PostConstruct
     public void initialize() {
         Type[] types = ObjectUtil.getActualTypeArguments(getClass());
-        this.documentClass = (Class<E>) types[0];
+        Type documentType = types[0];
+        if (!(documentType instanceof Class<?> documentClazz)) {
+            throw new IllegalStateException("Unable to resolve document class type argument for " + getClass()
+                    + ": expected a Class but got " + documentType);
+        }
+        @SuppressWarnings("unchecked")
+        Class<E> resolvedDocumentClass = (Class<E>) documentClazz;
+        this.documentClass = resolvedDocumentClass;
 
         org.springframework.data.mongodb.core.mapping.Document documentAnnotation = this.documentClass
                 .getAnnotation(org.springframework.data.mongodb.core.mapping.Document.class);

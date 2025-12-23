@@ -1,18 +1,23 @@
 // java
-    import org.springframework.test.context.DynamicPropertyRegistry;
+package aimlabs.gaming.rgs;
+
+import org.springframework.test.context.DynamicPropertyRegistry;
     import org.springframework.test.context.DynamicPropertySource;
 
     import org.testcontainers.containers.GenericContainer;
     import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.lifecycle.Startables;
     import org.testcontainers.utility.DockerImageName;
     import org.testcontainers.utility.MountableFile;
 
     import java.util.ArrayList;
     import java.util.List;
+import java.util.stream.Stream;
 
     public abstract class AbstractGamesTest {
 
-        static GenericContainer<?> redis;
+        protected static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:6-alpine"))
+            .withExposedPorts(6379);
 
         public static List<String> importFiles = new ArrayList<>();
 
@@ -21,11 +26,7 @@
                         .withExposedPorts(27017);
 
         static {
-            mongoDBContainer.start();
-
-            redis = new GenericContainer<>(DockerImageName.parse("redis:6-alpine"))
-                    .withExposedPorts(6379);
-            redis.start();
+            Startables.deepStart(Stream.of(mongoDBContainer, redis)).join();
         }
 
         protected static void importData(String importFile) {

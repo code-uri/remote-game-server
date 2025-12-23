@@ -32,7 +32,7 @@ def unzippedDir = "$buildDir/libs/engines"
 
 
 task copyEngines(type: Copy) {
-    description 'Copying engine fat jars.'
+    description = 'Copying engine fat jars.'
     from(configurations.engine)   // copies the resolved artifacts
     into unzippedDir
 }
