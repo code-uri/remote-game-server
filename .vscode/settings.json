@@ -1,5 +1,16 @@
 {
     "java.compile.nullAnalysis.mode": "disabled",
     "java.debug.settings.onBuildFailureProceed": true,
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+
+    "java.jdt.ls.java.home": "/Users/raghu/.sdkman/candidates/java/25-amzn",
+    "java.import.gradle.java.home": "/Users/raghu/.sdkman/candidates/java/25-amzn",
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-25",
+            "path": "/Users/raghu/.sdkman/candidates/java/25-amzn",
+            "default": true
+        }
+    ],
+    "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m -Xlog:disable"
 }

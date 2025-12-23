@@ -87,9 +87,7 @@ public class BFGamesConnectController {
         return response;
     }
 
-
-
-        @AllArgsConstructor
+    @AllArgsConstructor
     @Data
     public static class CurrencyInfo {
         String iso;
