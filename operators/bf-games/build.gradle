@@ -1,19 +1,28 @@
 plugins {
     id 'java-library'
+    id 'org.springframework.boot' version '3.5.5' apply false
 }
 
-apply from: "../publish.gradle"
-apply from: "../deps.gradle"
+apply plugin: 'io.spring.dependency-management'
+
+dependencyManagement {
+    imports {
+        mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+    }
+}
 
 dependencies {
 
-    api "in.aimlabs.gaming:rgs-api"
-    api "in.aimlabs.money:currency-api"
-    implementation "org.springframework.data:spring-data-redis"
-    implementation 'org.springframework:spring-webflux'
-    implementation 'io.projectreactor.netty:reactor-netty-http'
-}
+    implementation ('org.springframework:spring-web')
+    implementation 'org.springframework:spring-context'
 
-test{
-    useJUnitPlatform()
+    implementation 'org.slf4j:slf4j-api'
+
+
+    implementation  project(':rgs-core')
+
+    compileOnly "org.projectlombok:lombok:${LOMBOK_VERSION}"
+    annotationProcessor "org.projectlombok:lombok:${LOMBOK_VERSION}"
+
+
 }

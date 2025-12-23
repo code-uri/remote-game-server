@@ -1,25 +1,10 @@
-plugins {
-    id 'pl.allegro.tech.build.axion-release'
+// Aggregate build file for game-providers
+// This ensures all submodules are built when building game-providers
+
+tasks.register('build') {
+    dependsOn subprojects.collect { it.tasks.named('build') }
 }
 
-scmVersion {
-    versionCreator("versionWithBranch")
-
-    hooks {
-        pre("fileUpdate", [file: "README.md", pattern: {v,p -> /(version.) $v/}, replacement: {v, p -> "\$1 $v"}])
-        pre("commit")
-    }
-}
-
-
-tasks.register("loadKeyPassword"){
-    scmVersion.repository.customUsername.set(System.getenv("GPR_USER"))
-    scmVersion.repository.customPassword.set(System.getenv("GPR_KEY"))
-}
-
-release.dependsOn loadKeyPassword
-
-subprojects {
-    group "in.aimlabs.gaming.operator"
-    project.version = scmVersion.version
+tasks.register('clean') {
+    dependsOn subprojects.collect { it.tasks.named('clean') }
 }

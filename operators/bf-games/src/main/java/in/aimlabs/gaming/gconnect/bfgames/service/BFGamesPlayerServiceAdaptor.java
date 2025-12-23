@@ -1,28 +1,29 @@
 package in.aimlabs.gaming.gconnect.bfgames.service;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import in.aimlabs.gaming.AbstractConnectorWebClientBuilderService;
-import in.aimlabs.gaming.services.PlayerAccountManager;
-import in.aimlabs.gaming.services.PlayerAccountManagerFactory;
-import in.aimlabs.gaming.dto.*;
-import in.aimlabs.gaming.utils.PAMErrorsUtils;
-import in.aimlabs.gaming.dto.GameSession;
-import in.aimlabs.gaming.dto.GameSkin;
-import in.aimlabs.gaming.dto.StakeSettings;
-import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.connectors.Connector;
-import in.aimlabs.gaming.services.*;
-import in.aimlabs.money.currency.service.CurrencyService;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import in.aimlabs.rad.entity.Status;
+import aimlabs.gaming.rgs.gameoperators.Balance;
+import aimlabs.gaming.rgs.gameoperators.PlayerAccountManager;
+import aimlabs.gaming.rgs.gameoperators.PlayerAccountManagerFactory;
+import aimlabs.gaming.rgs.gameoperators.PlayerBalanceRequest;
+import aimlabs.gaming.rgs.gameoperators.PlayerInitialiseRequest;
+import aimlabs.gaming.rgs.gameoperators.PlayerInitialiseResponse;
+import aimlabs.gaming.rgs.gameoperators.PlayerTransactionRequest;
+import aimlabs.gaming.rgs.gameoperators.PlayerTransactionResponse;
+import aimlabs.gaming.rgs.gameoperators.Wallet;
+import aimlabs.gaming.rgs.transactions.TransactionType;
+import aimlabs.gaming.rgs.brandgames.BrandGame;
+import aimlabs.gaming.rgs.brandgames.IBrandGameService;
+import aimlabs.gaming.rgs.currency.ICurrencyService;
+import aimlabs.gaming.rgs.gameskins.IGameSkinService;
+import aimlabs.gaming.rgs.gameskins.GameSkin;
+import aimlabs.gaming.rgs.networks.INetworkService;
+import aimlabs.gaming.rgs.networks.Network;
+import aimlabs.gaming.rgs.settings.IGameSettingsService;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import in.aimlabs.gaming.gconnect.bfgames.controller.BFGamesConnectController;
-import in.aimlabs.gaming.gconnect.bfgames.exceptions.SessionExpiredException;
-import in.aimlabs.gaming.gconnect.bfgames.signer.Sha224Signer;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
@@ -32,75 +33,53 @@ import org.javamoney.moneta.function.MonetaryQueries;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.observability.DefaultSignalListener;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
-import reactor.core.scheduler.Schedulers;
-import reactor.netty.http.client.HttpClient;
-import reactor.util.function.Tuple2;
-import reactor.util.retry.Retry;
-import reactor.util.retry.RetrySpec;
+import org.springframework.web.client.RestClient;
 
 import javax.money.CurrencyUnit;
 import javax.money.Monetary;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.util.*;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 @Qualifier("bf-games")
 @Slf4j
 @Getter
 @Component
-public class BFGamesPlayerServiceAdaptor
-        implements PlayerAccountManagerFactory {
-
-    @Autowired
-    WebClient.Builder webClientBuilder;
-    @Autowired
-    private HttpClient httpClient; // 1. Inject the shared HttpClient bean
-    @Autowired
-    IBrandGameService brandGameService;
-    @Autowired
-    INetworkService networkService;
+public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory {
 
     @Value("${rgs.player.connector.bf-games.uid:bf-games-connector}")
     String connectorUid;
 
-    @Value("${rgs.player.connector.retries:3}")
-    private String transactionRetries;
+    private final RestClient.Builder restClientBuilder;
+
+    @Autowired(required = false)
+    private ICurrencyService currencyService;
+
+    @Autowired(required = false)
+    private INetworkService networkService;
+
+    @Autowired(required = false)
+    private IBrandGameService brandGameService;
+
+    @Autowired(required = false)
+    private IGameSettingsService gameSettingsService;
+
+    @Autowired(required = false)
+    private IGameSkinService gameSkinService;
 
     @Autowired
-    IGameSessionService gameSessionService;
+    public BFGamesPlayerServiceAdaptor(RestClient.Builder restClientBuilder) {
+        this.restClientBuilder = restClientBuilder;
+    }
 
-    @Autowired
-    IGameSettingsService gameSettingsService;
-
-    @Autowired
-    CurrencyService currencyService;
-
-    @Autowired
-    ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
-
-    @Autowired
-    IGameSkinService gameSkinService;
-
-    // @Autowired
-    // TransactionService transactionService;
-
-    @Autowired
-    ObjectMapper objectMapper;
-
+    @Override
     public boolean supports(Connector connector) {
         return connectorUid.equals(connector.getUid())
                 || connectorUid.equals(connector.getParentConnector());
@@ -108,257 +87,505 @@ public class BFGamesPlayerServiceAdaptor
 
     @Override
     public PlayerAccountManager getInstance(Connector connector) {
-        return new BFGamesPlayerServiceConnector(connector);
+        return new BFGamesPlayerAccountManager(connector);
     }
 
-    public Mono<List<BFGamesConnectController.GameData>> getGames(String currency) {
-        return currencyService.getCurrency(currency)
-                .flatMap(currencyUnit -> {
-                    return networkService.findOneByConnector(connectorUid)
-                            .flatMapMany(network -> {
-                                return brandGameService.findAllByNetwork(network.getUid())
-                                        .flatMap(brandGame -> {
-                                            return Mono.zip(
-                                                    gameSettingsService.findGameSettingsForCurrency(network.getTenant(),
-                                                            brandGame.getBrand(),
-                                                            brandGame.getGame(),
-                                                            currency),
-                                                    gameSkinService.findOne(brandGame.getGame()), Mono.just(brandGame));
-                                        });
-                            })
-                            .map(tuple3 -> {
-                                Map<String, Object> settings = tuple3.getT1();
-                                log.info("licences {}", settings.get("licences"));
-                                log.info("rtps {}", settings.get("rtps"));
-                                StakeSettings stakeSettings = objectMapper
-                                        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                                        .convertValue(settings, StakeSettings.class);
-                                GameSkin gameSkin = tuple3.getT2();
+    public List<BFGamesConnectController.GameData> getGames(String currency) {
+        CurrencyUnit currencyUnit = resolveCurrency(currency);
 
-                                BFGamesConnectController.GameData gameData = new BFGamesConnectController.GameData();
-                                gameData.setId(gameSkin.getUid());
-
-                                gameData.setName(gameSkin.getName());
-                                gameData.setVersion(gameSkin.getClientVersion());
-                                if (stakeSettings.getLadder() != null) {
-
-                                    gameData.setLineBetSteps(Arrays.stream(stakeSettings.getLadder())
-                                            .map(o -> Double.valueOf(o * 100).intValue()).toList());
-                                    Integer minBet = gameData.getLineBetSteps().getFirst();
-                                    Integer maxBet = gameData.getLineBetSteps().getLast();
-
-                                    if (stakeSettings.getMinMaxLines() != null
-                                            && stakeSettings.getMinMaxLines().length == 2)
-                                        gameData.setBetRatio(stakeSettings.getMinMaxLines()[1]);
-
-                                    gameData.setLicenses(new ArrayList<>());
-                                    Double[] rtps = stakeSettings.getRtps();
-                                    if (stakeSettings.getLicences() != null) {
-                                        for (String licence : stakeSettings.getLicences()) {
-                                            gameData.getLicenses()
-                                                    .add(new BFGamesConnectController.GameData.LicenseDetails(licence,
-                                                            rtps));
-                                        }
-                                    }
-
-                                    gameData.setDefaultLineBet(gameData.getLineBetSteps().getFirst());
-                                    gameData.setDefaultTotalBet(gameData.getDefaultLineBet() * gameData.getBetRatio());
-
-                                    gameData.setMinTotalBet(minBet * gameData.getBetRatio());
-                                    gameData.setMaxTotalBet(maxBet * gameData.getBetRatio());
-                                }
-                                return gameData;
-                            }).collectList();
-                });
-
-    }
-
-    class BFGamesPlayerServiceConnector extends AbstractConnectorWebClientBuilderService
-            implements PlayerAccountManager {
-
-        RetrySpec depositApiRetrySpec = Retry.max(3)
-                .filter(e -> {
-                    if (e instanceof BaseRuntimeException bre) {
-                        return false;
-                    } else
-                        return e instanceof RuntimeException;
-                });
-
-        RetrySpec withdrawApiRetrySpec = Retry.max(3)
-                .filter(e -> e instanceof TimeoutException);
-
-        BFGamesPlayerServiceConnector(Connector connector) {
-            super(webClientBuilder, connector, httpClient);
+        Network network = networkService != null ? networkService.findOneByConnector(connectorUid) : null;
+        if (network == null) {
+            return List.of();
         }
 
-        private Mono<Tuple2<GenericResponse, String>> processTxn(WebClient webClient,
-                String token,
-                String internalToken,
+        String networkUid = network.getUid();
+        if (networkUid == null || networkUid.isBlank()) {
+            return List.of();
+        }
+
+        List<BrandGame> brandGames = brandGameService != null
+                ? brandGameService.findAllByNetwork(networkUid)
+                : List.of();
+
+        if (brandGames.isEmpty() || gameSettingsService == null || gameSkinService == null) {
+            return List.of();
+        }
+
+        String tenant = TenantContextHolder.getTenant();
+
+        List<BFGamesConnectController.GameData> out = new ArrayList<>();
+        for (BrandGame brandGame : brandGames) {
+            String brand = brandGame.getBrand();
+            String gameId = brandGame.getGame();
+
+            if (brand == null || brand.isBlank() || gameId == null || gameId.isBlank()) {
+                continue;
+            }
+
+            GameSkin skin;
+            try {
+                skin = gameSkinService.findOneByUid(gameId);
+            } catch (Exception e) {
+                log.debug("bf-games getGames: failed to load GameSkin uid={} error={}", gameId, e.toString());
+                continue;
+            }
+            if (skin == null) {
+                continue;
+            }
+
+            Map<String, Object> settings;
+            try {
+                settings = gameSettingsService.findGameSettingsForCurrency(tenant, brand, gameId,
+                        currencyUnit.getCurrencyCode());
+            } catch (Exception e) {
+                log.debug("bf-games getGames: failed settings brand={} game={} error={}", brand, gameId,
+                        e.toString());
+                settings = Map.of();
+            }
+
+            BFGamesConnectController.GameData dto = new BFGamesConnectController.GameData();
+            dto.setId(skin.getUid());
+            dto.setName(skin.getName());
+            dto.setVersion(skin.getClientVersion());
+            dto.setLines(skin.getPayLines());
+
+            List<Integer> lineBetSteps = toMinorIntList(currencyUnit, settings.get("ladder"));
+            dto.setLineBetSteps(lineBetSteps);
+
+            Integer minTotalBet = toMinorInt(currencyUnit, firstNumber(settings.get("minMax"), 0));
+            Integer maxTotalBet = toMinorInt(currencyUnit, firstNumber(settings.get("minMax"), 1));
+
+            Integer defaultLineBet = toMinorInt(currencyUnit, asNumber(settings.get("defaultStake")));
+            if (defaultLineBet == null && !lineBetSteps.isEmpty()) {
+                defaultLineBet = lineBetSteps.get(0);
+            }
+
+            dto.setMinTotalBet(minTotalBet);
+            dto.setMaxTotalBet(maxTotalBet);
+            dto.setDefaultLineBet(defaultLineBet);
+
+            Integer lines = dto.getLines();
+            if (defaultLineBet != null) {
+                dto.setDefaultTotalBet(lines != null && lines > 0 ? defaultLineBet * lines : defaultLineBet);
+            }
+
+            dto.setLicenses(toLicenseDetails(settings.get("licences"), settings.get("rtps")));
+            out.add(dto);
+        }
+
+        return out;
+    }
+
+    private CurrencyUnit resolveCurrency(String currencyCode) {
+        if (currencyCode == null || currencyCode.isBlank()) {
+            throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "currency is missing");
+        }
+
+        if (currencyService != null) {
+            CurrencyUnit cu = currencyService.getCurrency(currencyCode);
+            if (cu != null) {
+                return cu;
+            }
+        }
+
+        return Monetary.getCurrency(currencyCode);
+    }
+
+    private static Number asNumber(Object o) {
+        return (o instanceof Number n) ? n : null;
+    }
+
+    private static Number firstNumber(Object o, int index) {
+        if (o == null) {
+            return null;
+        }
+        if (o instanceof List<?> list) {
+            if (index < 0 || index >= list.size()) {
+                return null;
+            }
+            return asNumber(list.get(index));
+        }
+        if (o.getClass().isArray()) {
+            Object[] arr = (Object[]) o;
+            if (index < 0 || index >= arr.length) {
+                return null;
+            }
+            return asNumber(arr[index]);
+        }
+        return null;
+    }
+
+    private static Integer toMinorInt(CurrencyUnit currencyUnit, Number major) {
+        if (currencyUnit == null || major == null) {
+            return null;
+        }
+        long minor = Money.of(BigDecimal.valueOf(major.doubleValue()), currencyUnit)
+                .query(MonetaryQueries.convertMinorPart())
+                .longValue();
+        if (minor > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        if (minor < Integer.MIN_VALUE) {
+            return Integer.MIN_VALUE;
+        }
+        return (int) minor;
+    }
+
+    private static List<Integer> toMinorIntList(CurrencyUnit currencyUnit, Object ladder) {
+        if (ladder == null) {
+            return Collections.emptyList();
+        }
+
+        List<?> items;
+        if (ladder instanceof List<?> list) {
+            items = list;
+        } else if (ladder.getClass().isArray()) {
+            items = List.of((Object[]) ladder);
+        } else {
+            return Collections.emptyList();
+        }
+
+        List<Integer> out = new ArrayList<>(items.size());
+        for (Object item : items) {
+            Integer v = toMinorInt(currencyUnit, asNumber(item));
+            if (v != null) {
+                out.add(v);
+            }
+        }
+        return out;
+    }
+
+    private static List<BFGamesConnectController.GameData.LicenseDetails> toLicenseDetails(Object licencesObj,
+            Object rtpsObj) {
+        Double[] rtps = null;
+        if (rtpsObj instanceof List<?> list) {
+            rtps = list.stream().filter(Number.class::isInstance).map(Number.class::cast)
+                    .map(n -> n.doubleValue()).toArray(Double[]::new);
+        } else if (rtpsObj instanceof Number[] arr) {
+            rtps = new Double[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                rtps[i] = arr[i] == null ? null : arr[i].doubleValue();
+            }
+        } else if (rtpsObj instanceof double[] arr) {
+            rtps = new Double[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                rtps[i] = arr[i];
+            }
+        }
+
+        List<String> licences = new ArrayList<>();
+        if (licencesObj instanceof List<?> list) {
+            for (Object o : list) {
+                if (o != null) {
+                    licences.add(String.valueOf(o));
+                }
+            }
+        } else if (licencesObj instanceof String[] arr) {
+            licences.addAll(List.of(arr));
+        }
+
+        if (licences.isEmpty()) {
+            BFGamesConnectController.GameData.LicenseDetails ld = new BFGamesConnectController.GameData.LicenseDetails();
+            if (rtps != null) {
+                ld.setRtps(rtps);
+            }
+            return List.of(ld);
+        }
+
+        Double[] finalRtps = rtps;
+        return licences.stream()
+                .map(l -> new BFGamesConnectController.GameData.LicenseDetails(l, finalRtps))
+                .toList();
+    }
+
+    private final class BFGamesPlayerAccountManager implements PlayerAccountManager {
+        private final Connector connector;
+        private final RestClient client;
+
+        private BFGamesPlayerAccountManager(Connector connector) {
+            this.connector = Objects.requireNonNull(connector, "connector");
+            if (connector.getBaseUrl() == null || connector.getBaseUrl().isBlank()) {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST,
+                        "bf-games connector baseUrl is missing");
+            }
+            this.client = restClientBuilder.baseUrl(connector.getBaseUrl()).build();
+        }
+
+        @Override
+        public PlayerInitialiseResponse playerInitialise(PlayerInitialiseRequest request) {
+            GenericRequest.Args args = new GenericRequest.Args();
+            addCallerIdAndPassword(args);
+            args.setToken(request.getSessionToken());
+
+            GenericRequest tokenAuthenticationRequest = new GenericRequest(
+                    "authenticateToken",
+                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
+            tokenAuthenticationRequest.setArgs(args);
+
+            GenericResponse genericResponse = post(tokenAuthenticationRequest);
+            ensureOk(genericResponse, false);
+
+            PlayerInitialiseResponse res = new PlayerInitialiseResponse();
+            res.setPlayerId(genericResponse.getResult().player_id);
+            res.setCurrency(genericResponse.getResult().currency);
+            Money balance = Money.ofMinor(Monetary.getCurrency(genericResponse.getResult().currency),
+                    genericResponse.getResult().balance);
+            res.setTotalBalance(balance.getNumberStripped());
+            res.setCash(new Balance().amount(balance.getNumberStripped()).onHold(BigDecimal.ZERO)
+                    .total(balance.getNumberStripped()));
+            res.setBonus(new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+            res.setExternalToken(request.getSessionToken());
+            return res;
+        }
+
+        @Override
+        public Wallet playerBalance(PlayerBalanceRequest request) {
+            GenericRequest.Args args = new GenericRequest.Args();
+            addCallerIdAndPassword(args);
+            args.setToken(request.getToken());
+            args.setCurrency(request.getCurrency());
+            args.setGame_ref(request.getGameId());
+            args.setTimestamp(System.currentTimeMillis());
+
+            GenericRequest getBalanceRequest = new GenericRequest(
+                    "getBalance",
+                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
+            getBalanceRequest.setArgs(args);
+
+            GenericResponse genericResponse = post(getBalanceRequest);
+            ensureOk(genericResponse, false);
+
+            CurrencyUnit cu = Monetary.getCurrency(genericResponse.getResult().currency);
+            Money balance = Money.ofMinor(cu, genericResponse.getResult().balance);
+
+            Wallet wallet = new Wallet();
+            wallet.setCurrency(cu.getCurrencyCode());
+            wallet.setCash(new Balance().amount(balance.getNumberStripped()).onHold(BigDecimal.ZERO)
+                    .total(balance.getNumberStripped()));
+            wallet.setBonus(new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+            wallet.setTotalBalance(balance.getNumberStripped());
+            return wallet;
+        }
+
+        @Override
+        public PlayerTransactionResponse playerTransaction(PlayerTransactionRequest request) {
+            TransactionType type = request.getRequestType();
+            if (type == null) {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "requestType is null");
+            }
+
+            return switch (type) {
+                case ROLLBACK -> rollback(request);
+                case CREDIT, CLOSED -> creditOrClosed(request);
+                case DEBIT -> debit(request);
+                case DEBIT_CREDIT -> debitCredit(request);
+            };
+        }
+
+        @Override
+        public PlayerTransactionResponse rollback(PlayerTransactionRequest request) {
+            TxnResult txn = processTxn(
+                    request,
+                    request.getTxnId(),
+                    0d,
+                    TransactionType.ROLLBACK,
+                    true);
+            return toTxnResponse(request, List.of(txn));
+        }
+
+        @Override
+        public void closeSession(PlayerBalanceRequest request) {
+            GenericRequest.Args args = new GenericRequest.Args();
+            addCallerIdAndPassword(args);
+            args.setStatus("CLOSE");
+            args.setToken(request.getToken());
+
+            GenericRequest terminateRequest = new GenericRequest(
+                    "terminate",
+                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
+            terminateRequest.setArgs(args);
+
+            GenericResponse genericResponse = post(terminateRequest);
+            ensureOk(genericResponse, false);
+        }
+
+        private PlayerTransactionResponse creditOrClosed(PlayerTransactionRequest request) {
+            Double credit = request.getCredit();
+            if (request.getRequestType() == TransactionType.CLOSED || credit == null) {
+                credit = 0d;
+            }
+            TxnResult txn = processTxn(
+                    request,
+                    request.getTxnId(),
+                    credit,
+                    TransactionType.CREDIT,
+                    true);
+            return toTxnResponse(request, List.of(txn));
+        }
+
+        private PlayerTransactionResponse debit(PlayerTransactionRequest request) {
+            if (request.getDebit() == null) {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Debit amount is null");
+            }
+            TxnResult txn = processTxn(
+                    request,
+                    request.getTxnId(),
+                    request.getDebit(),
+                    TransactionType.DEBIT,
+                    false);
+            return toTxnResponse(request, List.of(txn));
+        }
+
+        private PlayerTransactionResponse debitCredit(PlayerTransactionRequest request) {
+            if (request.getDebit() == null) {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Debit amount is null");
+            }
+            if (request.getCredit() == null) {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Credit amount is null");
+            }
+
+            TxnResult debit = processTxn(
+                    request,
+                    request.getTxnId() + "_0",
+                    request.getDebit(),
+                    TransactionType.DEBIT,
+                    false);
+            TxnResult credit = processTxn(
+                    request,
+                    request.getTxnId() + "_1",
+                    request.getCredit(),
+                    TransactionType.CREDIT,
+                    true);
+            return toTxnResponse(request, List.of(debit, credit));
+        }
+
+        private PlayerTransactionResponse toTxnResponse(PlayerTransactionRequest request, List<TxnResult> results) {
+            CurrencyUnit cu = Monetary.getCurrency(request.getCurrency());
+            long lastBalanceMinor = results.isEmpty()
+                    ? 0
+                    : results.get(results.size() - 1).response.getResult().balance;
+            Money balance = Money.ofMinor(cu, lastBalanceMinor);
+
+            Wallet wallet = new Wallet();
+            wallet.setCurrency(cu.getCurrencyCode());
+            wallet.setTotalBalance(balance.getNumberStripped());
+            wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
+                    .total(wallet.getTotalBalance()));
+            wallet.setBonus(new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+
+            Map<String, Object> processed = new HashMap<>();
+            for (TxnResult result : results) {
+                String processedId = result.response.getResult().transaction_id;
+                if (processedId != null) {
+                    processed.put(result.requestTxnId, processedId);
+                }
+            }
+
+            PlayerTransactionResponse response = new PlayerTransactionResponse();
+            response.setTxnId(request.getTxnId());
+            response.setWallet(wallet);
+            response.setProcessedTxnIds(processed);
+            return response;
+        }
+
+        private TxnResult processTxn(
+                PlayerTransactionRequest request,
                 String txnId,
-                String gameId,
-                String gameVersion,
-                String player,
-                CurrencyUnit cu,
                 Double amount,
                 TransactionType type,
-                String gameRoundId,
-                String orgTxnId,
-                Double orgTxnAmount,
                 boolean roundClosed) {
 
-            GenericRequest.Args args = new GenericRequest.Args();
-            GenericRequest playRequest = null;
+            CurrencyUnit cu = Monetary.getCurrency(request.getCurrency());
             long minorAmount = Money.of(amount != null ? amount : 0D, cu).query(MonetaryQueries.convertMinorPart());
-            /*
-             * if (type == TransactionType.CREDIT && amount == 0) {
-             * playRequest = new GenericRequest("deposit", new
-             * GenericRequest.Mirror(UUID.randomUUID().toString()));
-             * } else
-             */ if (type == TransactionType.CREDIT) {
-                playRequest = new GenericRequest("deposit", new GenericRequest.Mirror(UUID.randomUUID().toString()));
-            } else if (type == TransactionType.DEBIT) {
-                playRequest = new GenericRequest("withdraw", new GenericRequest.Mirror(UUID.randomUUID().toString()));
-            } else if (type == TransactionType.ROLLBACK) {
-                playRequest = new GenericRequest("rollback", new GenericRequest.Mirror(UUID.randomUUID().toString()));
-                args.setWithdraw_action_id(orgTxnId);
-                if (orgTxnAmount != null)
-                    args.setWithdraw_amount(Money.of(orgTxnAmount, cu).query(MonetaryQueries.convertMinorPart()));
-            } else
-                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "unsupported transaction " + type);
 
-            playRequest.setArgs(args);
-
+            GenericRequest.Args args = new GenericRequest.Args();
             addCallerIdAndPassword(args);
-            args.setToken(token);
-            args.setAmount(minorAmount);
+            args.setToken(request.getToken());
             args.setCurrency(cu.getCurrencyCode());
-            args.setGame_ref(gameId);
-            if (gameVersion != null)
-                args.setGame_ver(gameVersion);
-
-            args.setRound_id(gameRoundId);
+            args.setGame_ref(request.getGameId());
+            if (request.getGameVersion() != null) {
+                args.setGame_ver(request.getGameVersion());
+            }
+            args.setRound_id(request.getGameRoundId());
             args.setAction_id(txnId);
             args.setOffline(false);
 
-            if (type == TransactionType.CREDIT)
+            GenericRequest playRequest;
+            if (type == TransactionType.CREDIT) {
+                playRequest = new GenericRequest("deposit", new GenericRequest.Mirror(UUID.randomUUID().toString()));
+                args.setAmount(minorAmount);
                 args.setEnd_round(roundClosed);
-
-            // Not mandatory
-            // args.setExternal_session_id(internalToken);
+            } else if (type == TransactionType.DEBIT) {
+                playRequest = new GenericRequest("withdraw", new GenericRequest.Mirror(UUID.randomUUID().toString()));
+                args.setAmount(minorAmount);
+            } else if (type == TransactionType.ROLLBACK) {
+                playRequest = new GenericRequest("rollback", new GenericRequest.Mirror(UUID.randomUUID().toString()));
+                args.setWithdraw_action_id(request.getOrgTxnUid());
+                if (request.getOrgTxnAmount() != null) {
+                    args.setWithdraw_amount(
+                            Money.of(request.getOrgTxnAmount(), cu).query(MonetaryQueries.convertMinorPart()));
+                }
+            } else {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "unsupported transaction " + type);
+            }
 
             playRequest.setArgs(args);
 
-            long startMillis = System.currentTimeMillis();
-            AtomicReference<GenericRequest> genericRequestAtomicReference = new AtomicReference<>(playRequest);
-            GenericRequest finalPlayRequest = playRequest;
-            return webClient
-                    .post()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(genericRequestAtomicReference.get())
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .bodyToMono(GenericResponse.class)
-                    // .doOnNext(genericResponse -> {
-                    // if(type==TransactionType.DEBIT && "happy-hours".equals(gameId))
-                    // throw new RuntimeException("Simulate run time error");
-                    // })
-                    .onErrorMap(throwable -> {
-                        if (type == TransactionType.DEBIT) {
-                            return new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND, throwable);
-                        }
-                        return throwable;
-                    })
-                    .map(genericResponse -> {
-                        String errorcode = genericResponse.getResult().errorcode;
-                        if (errorcode == null) {
-                            return genericResponse;
-                        }
-                        GenericRequest genericRequest = genericRequestAtomicReference.get();
-                        if ("1000".equals(errorcode)) {
-                            if (type == TransactionType.DEBIT)
-                                throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND,
-                                        genericResponse.result.toString());
+            GenericResponse response;
+            try {
+                response = post(playRequest);
+            } catch (RuntimeException e) {
+                if (type == TransactionType.DEBIT) {
+                    throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND, e);
+                }
+                throw e;
+            }
 
-                            // This should not occur ideally because error 1000 will not be returned for
-                            // Rollback request.
-                            else if (type == TransactionType.ROLLBACK)
-                                throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR,
-                                        "Rollback gameRound " + gameRoundId + " failed!");
-                            else// This should not occur ideally because operator send 1000 errocode only for
-                                // debit requests.
-                                throw new BaseRuntimeException(PAMErrorCode.GENERAL_API_ERROR,
-                                        "Cannot handle 1000 errorCode for txnType " + type);
-                        } else if (errorcode.startsWith("200")
-                                && !genericRequest.getArgs().isOffline() // try offline deposit only if it is not an
-                                                                         // offline deposit request.
-                                && (type == TransactionType.CREDIT || type == TransactionType.ROLLBACK)) {
-                            throw new SessionExpiredException();// retry with offline deposit / rollback
-                        } else if (errorcode.equals("4000") && type == TransactionType.DEBIT) {
-                            throw new BaseRuntimeException(PAMErrorCode.INSUFFICIENT_BALANCE, errorcode);
-                        }
-                        // else if(errorcode.startsWith("300") || errorcode.startsWith("400"))
-                        else if (errorcode.startsWith("300") || errorcode.startsWith("400")) {
-                            throw new BaseRuntimeException(PAMErrorCode.GENERAL_API_ERROR, errorcode);
-                        } else {
-                            throw new BaseRuntimeException(PAMErrorCode.GENERAL_API_ERROR,
-                                    "request failed with errorcode " + errorcode);
-                        }
-                    })
-                    .doOnError(throwable -> {
-                        GenericRequest genericRequest = genericRequestAtomicReference.get();
-                        if (throwable instanceof SessionExpiredException && !genericRequest.getArgs().isOffline()) {
-                            genericRequest.setMirror(new GenericRequest.Mirror(UUID.randomUUID().toString()));
-                            genericRequest.getArgs()
-                                    .setOffline(true)
-                                    .setToken(getOfflineToken(getOfflineTokenKey(), getUser(),
-                                            genericRequest.getArgs().getRound_id(),
-                                            genericRequest.getArgs().getAction_id(),
-                                            player));
-                        }
-                    })
-                    .retryWhen(
-                            (type == TransactionType.CREDIT || type == TransactionType.ROLLBACK) ? depositApiRetrySpec
-                                    : withdrawApiRetrySpec)
-                    .zipWith(Mono.just(txnId))
-                    .tap(() -> new DefaultSignalListener<Tuple2<GenericResponse, String>>() {
-
-                        @Override
-                        public void doOnSubscription() throws Throwable {
-                            log.info("BFgames player service. process transaction request {}", finalPlayRequest);
-                        }
-
-                        public void doFinally(SignalType signalType) throws Throwable {
-                            if (signalType == SignalType.CANCEL)
-                                log.info("Mono signalType {}. Transaction {} elapsed Time: {}ms", signalType, txnId,
-                                        System.currentTimeMillis() - startMillis);
-                        }
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            // log.error("BFgames transaction {} failed.", txnId, error);
-                        }
-
-                        public void doOnNext(Tuple2<GenericResponse, String> response) throws Throwable {
-                            log.info("{}. Elapsed Time: {}ms", response, System.currentTimeMillis() - startMillis);
-                        }
-                    });
+            ensureOk(response, type == TransactionType.DEBIT);
+            return new TxnResult(txnId, response);
         }
 
-        private static String getOfflineToken(String offlineToken, String callerId, String roundId, String actionId,
-                String player) {
-            /*
-             * String secret = getConnector().getSettings().getOrDefault(
-             * "secret", "").toString();
-             */
+        private GenericResponse post(GenericRequest request) {
+            GenericResponse response = client
+                    .post()
+                    .uri("/")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(GenericResponse.class);
 
-            try {
-                Sha224Signer sha224Signer = new Sha224Signer("");
-                String data = offlineToken + callerId + roundId + actionId + "_" + player;
-                return sha224Signer.hash(data.getBytes(StandardCharsets.UTF_8));
-            } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR,
-                        "failed to generate offline token for roundId: " + roundId + ", actionId: " + actionId
-                                + ", player: " + player);
+            if (response == null) {
+                throw new BaseRuntimeException(SystemErrorCode.EMPTY_RESPONSE, "bf-games returned empty response");
             }
+            return response;
+        }
+
+        private void ensureOk(GenericResponse response, boolean rollbackGameRoundOnError) {
+            String errorcode = response.getResult() == null ? null : response.getResult().errorcode;
+            if (errorcode == null || "0".equals(errorcode)) {
+                return;
+            }
+
+            if (rollbackGameRoundOnError) {
+                throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND,
+                        "bf-games errorcode=" + errorcode);
+            }
+
+            if ("2001".equals(errorcode)) {
+                throw new BaseRuntimeException(SystemErrorCode.TOKEN_EXPIRED);
+            }
+            if ("2002".equals(errorcode)) {
+                throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+            }
+            if ("2003".equals(errorcode)) {
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Player not logged in.");
+            }
+            if ("4000".equals(errorcode)) {
+                throw new BaseRuntimeException(SystemErrorCode.INSUFFICIENT_BALANCE);
+            }
+
+            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "bf-games errorcode=" + errorcode);
         }
 
         private void addCallerIdAndPassword(GenericRequest.Args args) {
@@ -367,516 +594,19 @@ public class BFGamesPlayerServiceAdaptor
         }
 
         private String getPassword() {
-            return getConnector().getSettings().getOrDefault("password", "QubitGamesSuperPassword!").toString();
+            return connector.getSettings().getOrDefault("password", "").toString();
         }
 
         private String getUser() {
-            return getConnector().getSettings().getOrDefault("user", "qubitgames").toString();
+            return connector.getSettings().getOrDefault("user", "").toString();
         }
+    }
 
-        private String getOfflineTokenKey() {
-            return getConnector().getSettings().getOrDefault("offlineTokenKey", "QubitGamesOfflineTokenSecret")
-                    .toString();
-        }
-
-        @Override
-        public Mono<Void> closeSession(PlayerBalanceRequest request) {
-            long startMillis = System.currentTimeMillis();
-
-            GenericRequest.Args args = new GenericRequest.Args();
-            addCallerIdAndPassword(args);
-            args.setOperator_id("");
-            args.setStatus("CLOSE");
-            args.setToken(request.getToken());
-
-            GenericRequest tokenAuthenticationRequest = new GenericRequest("terminate",
-                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
-            tokenAuthenticationRequest.setArgs(args);
-
-            return getWebClient()
-                    .post()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(tokenAuthenticationRequest)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, PAMErrorsUtils::handleError)
-                    .bodyToMono(GenericResponse.class)
-                    // .publishOn(Schedulers.parallel())
-                    .tap(() -> new DefaultSignalListener<GenericResponse>() {
-
-                        public void doFinally(SignalType terminationType) throws Throwable {
-                            log.info("Elapsed Time: {}ms", System.currentTimeMillis() - startMillis);
-                        }
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.error("BFgames playerInfo request failed.", error);
-                        }
-                    })
-                    .tap(() -> new DefaultSignalListener<GenericResponse>() {
-                        @Override
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.info("Error creating player initialise response object.", error);
-                            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, error);
-                        }
-                    }).then();
-        }
-
-        public Mono<PlayerInitialiseResponse> playerInitialise(PlayerInitialiseRequest request) {
-            long startMillis = System.currentTimeMillis();
-
-            GenericRequest.Args args = new GenericRequest.Args();
-            addCallerIdAndPassword(args);
-            args.setToken(request.getSessionToken());
-
-            GenericRequest tokenAuthenticationRequest = new GenericRequest("authenticateToken",
-                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
-            tokenAuthenticationRequest.setArgs(args);
-
-            return getWebClient()
-                    .post()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(tokenAuthenticationRequest)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, PAMErrorsUtils::handleError)
-                    .bodyToMono(GenericResponse.class)
-                    // .publishOn(Schedulers.parallel())
-
-                    .map(genericResponse -> {
-
-                        if (genericResponse.getResult().getErrorcode() != null
-                                && !"0".equals(genericResponse.getResult().getErrorcode())) {
-                            if ("2001".equals(genericResponse.getResult().getErrorcode())) {
-                                throw new BaseRuntimeException(PAMErrorCode.TOKEN_EXPIRED);
-                            }
-                            if ("2003".equals(genericResponse.getResult().getErrorcode())) {
-                                throw new BaseRuntimeException(PAMErrorCode.INVALID_REQUEST, "Player not logged in.");
-                            } else if ("2002".equals(genericResponse.getResult().getErrorcode())) {
-                                throw new BaseRuntimeException(PAMErrorCode.TOKEN_INVALID);
-                            } else {
-                                throw new BaseRuntimeException(PAMErrorCode.GENERAL_API_ERROR);
-                            }
-                        }
-
-                        PlayerInitialiseResponse res;
-
-                        res = new PlayerInitialiseResponse();
-                        res.setPlayerId(genericResponse.getResult().player_id);
-                        res.setCurrency(genericResponse.getResult().currency);
-                        Money balance = Money.ofMinor(Monetary.getCurrency(genericResponse.getResult().currency),
-                                genericResponse.getResult().getBalance());
-                        res.setTotalBalance(balance.getNumberStripped());
-                        res.setCash(new Balance().amount(balance.getNumberStripped()).onHold(BigDecimal.ZERO)
-                                .total(balance.getNumberStripped()));
-                        res.setBonus(
-                                new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
-                        res.setExternalToken(request.getSessionToken());
-
-                        return res;
-                    })
-                    .doOnNext(playerInitialiseResponse -> {
-                        reactiveRedisTemplate.opsForList()
-                                .rightPush("default-active-sessions", playerInitialiseResponse.getExternalToken())
-                                .subscribeOn(Schedulers.boundedElastic())
-                                .subscribe();
-                    })
-                    .tap(() -> new DefaultSignalListener<PlayerInitialiseResponse>() {
-
-                        public void doFinally(SignalType terminationType) throws Throwable {
-                            log.info("Elapsed Time: {}ms", System.currentTimeMillis() - startMillis);
-                        }
-
-                        @Override
-                        public void doOnSubscription() throws Throwable {
-                            log.info("{}", request);
-                        }
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.error("Error creating player initialise response object.", error);
-                            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR);
-                        }
-                    });
-        }
-
-        public Mono<Wallet> playerBalance(PlayerBalanceRequest request) {
-            long startMillis = System.currentTimeMillis();
-
-            GenericRequest.Args args = new GenericRequest.Args();
-            addCallerIdAndPassword(args);
-            args.setToken(request.getToken());
-            args.setGame_ref(request.getGameId());
-            args.setCurrency(request.getCurrency());
-            args.setOperator_id(null);
-            args.setExternal_session_id(request.getInternalToken());
-            args.setTimestamp(System.currentTimeMillis());
-
-            GenericRequest getBalanceRequest = new GenericRequest("getBalance",
-                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
-            getBalanceRequest.setArgs(args);
-
-            return getWebClient()
-                    .post()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(getBalanceRequest)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, PAMErrorsUtils::handleError)
-                    .bodyToMono(GenericResponse.class)
-                    // .publishOn(Schedulers.parallel())
-                    .tap(() -> new DefaultSignalListener<GenericResponse>() {
-
-                        public void doFinally(SignalType terminationType) throws Throwable {
-                            log.info("Elapsed Time: {}ms", System.currentTimeMillis() - startMillis);
-                        }
-
-                        @Override
-                        public void doOnNext(GenericResponse value) throws Throwable {
-                            log.info("BFgames player balance response {}.", value);
-                        }
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.error("BFgames playerInfo request failed.", error);
-                        }
-                    })
-                    .map(genericResponse -> {
-                        Money balance = Money.ofMinor(Monetary.getCurrency(genericResponse.getResult().getCurrency()),
-                                genericResponse.getResult().getBalance());
-
-                        Wallet wallet = new Wallet();
-                        wallet.setCurrency(genericResponse.getResult().getCurrency());
-                        wallet.setCash(new Balance().amount(balance.getNumberStripped()).onHold(BigDecimal.ZERO)
-                                .total(balance.getNumberStripped()));
-                        wallet.setTotalBalance(balance.getNumberStripped());
-                        return wallet;
-                    })
-                    .tap(() -> new DefaultSignalListener<>() {
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.info("Error creating player balance response object.", error);
-                            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, error);
-                        }
-
-                        @Override
-                        public void doOnNext(Wallet value) throws Throwable {
-                            log.info("BFgames player wallet response {}", value);
-                        }
-                    });
-        }
-
-        public Mono<PlayerTransactionResponse> playerTransaction(PlayerTransactionRequest request) {
-            PlayerTransactionResponse response = new PlayerTransactionResponse();
-            CurrencyUnit cu = Monetary.getCurrency(request.getCurrency());
-
-            PlayerGameTransaction zero = new PlayerGameTransaction();
-            zero.setAmount(BigDecimal.ZERO);
-            TransactionType type = request.getRequestType();
-            List<Mono<Tuple2<GenericResponse, String>>> txsFlux = new ArrayList<>();
-            if (type == TransactionType.ROLLBACK) {
-                txsFlux.add(processTxn(getWebClient(),
-                        request.getToken(),
-                        request.getInternalToken(),
-                        request.getTxnId(),
-                        request.getGameId(),
-                        request.getGameVersion(),
-                        request.getPlayerId(),
-                        cu,
-                        0D,
-                        TransactionType.ROLLBACK, request.getGameRoundId(),
-                        request.getOrgTxnUid(),
-                        request.getOrgTxnAmount(),
-                        true));
-            } else {
-                if (type == TransactionType.CLOSED || type == TransactionType.CREDIT) {
-                    if (request.getCredit() == null || type == TransactionType.CLOSED) {
-                        log.info("No wins for gameRound {}. sending zero wins request ", request.getGameRoundId());
-                        txsFlux.add(processTxn(getWebClient(),
-                                request.getToken(),
-                                request.getInternalToken(),
-                                request.getTxnId(),
-                                request.getGameId(),
-                                request.getGameVersion(),
-                                request.getPlayerId(),
-                                cu,
-                                0d,
-                                TransactionType.CREDIT, request.getGameRoundId(),
-                                request.getOrgTxnUid(),
-                                request.getOrgTxnAmount(),
-                                request.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED));
-                    } else {
-                        txsFlux.add(processTxn(getWebClient(),
-                                request.getToken(),
-                                request.getInternalToken(),
-                                request.getTxnId(),
-                                request.getGameId(),
-                                request.getGameVersion(),
-                                request.getPlayerId(),
-                                cu,
-                                request.getCredit(),
-                                request.getRequestType(), request.getGameRoundId(),
-                                request.getOrgTxnUid(),
-                                request.getOrgTxnAmount(),
-                                request.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED));
-                    }
-                } else if (type == TransactionType.DEBIT) {
-                    if (request.getDebit() == null) {
-                        throw new BaseRuntimeException(PAMErrorCode.INVALID_REQUEST, "Debit amount is null");
-                    }
-                    Mono<Tuple2<GenericResponse, String>> responseMono = processTxn(getWebClient(),
-                            request.getToken(),
-                            request.getInternalToken(),
-                            request.getTxnId(),
-                            request.getGameId(),
-                            request.getGameVersion(),
-                            request.getPlayerId(),
-                            cu,
-                            request.getDebit(),
-                            request.getRequestType(), request.getGameRoundId(),
-                            request.getOrgTxnUid(),
-                            request.getOrgTxnAmount(),
-                            request.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED);
-                    /*
-                     * .onErrorResume(throwable -> {
-                     * if(throwable instanceof BaseRuntimeException err){
-                     * if(err.getErrorCode()==SystemErrorCode.ROLLBACK_GAME_ROUND){
-                     *//*
-                        * txReq.setRequestType(TransactionType.ROLLBACK);
-                        * return processTxn(webClient,
-                        * UUID.randomUUID().toString(),
-                        * txReq.getGameId(),
-                        * txReq.getPlayerId(),
-                        * cu,
-                        * txReq.getDebit(),
-                        * TransactionType.ROLLBACK,
-                        * txReq.getGameRoundId(), true)
-                        * .then(Mono.error(new
-                        * BaseRuntimeException(SystemErrorCode.GAME_ROUND_CANCELLED)));
-                        *//*
-                           * return rollback(request).then(Mono.error(new
-                           * BaseRuntimeException(SystemErrorCode.GAME_ROUND_CANCELLED)));
-                           * }
-                           * }
-                           * return Mono.error(throwable);
-                           * });
-                           */
-
-                    txsFlux.add(responseMono);
-                } else if (type == TransactionType.DEBIT_CREDIT) {
-                    if (request.getDebit() == null) {
-                        throw new BaseRuntimeException(PAMErrorCode.INVALID_REQUEST, "Debit amount is null");
-                    } else if (request.getCredit() == null) {
-                        throw new BaseRuntimeException(PAMErrorCode.INVALID_REQUEST, "Credit amount is null");
-                    }
-
-                    Mono<Tuple2<GenericResponse, String>> responseMono = processTxn(getWebClient(),
-                            request.getToken(),
-                            request.getInternalToken(),
-                            request.getTxnId() + "_0",
-                            request.getGameId(),
-                            request.getGameVersion(),
-                            request.getPlayerId(),
-                            cu,
-                            request.getDebit(),
-                            TransactionType.DEBIT,
-                            request.getGameRoundId(),
-                            request.getOrgTxnUid(),
-                            request.getOrgTxnAmount(),
-                            false);
-                    txsFlux.add(responseMono);
-
-                    txsFlux.add(processTxn(getWebClient(),
-                            request.getToken(),
-                            request.getInternalToken(),
-                            request.getTxnId() + "_1",
-                            request.getGameId(),
-                            request.getGameVersion(),
-                            request.getPlayerId(),
-                            cu,
-                            request.getCredit(),
-                            TransactionType.CREDIT,
-                            request.getGameRoundId(),
-                            request.getOrgTxnUid(),
-                            request.getOrgTxnAmount(),
-                            request.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED));
-
-                } else {
-                    throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
-                            "unsupported requestType " + request.getRequestType());
-                }
-
-            }
-            return Flux.concat(txsFlux)
-                    .collectList()
-                    .tap(() -> new DefaultSignalListener<List<Tuple2<GenericResponse, String>>>() {
-                        @Override
-                        public void doOnNext(List<Tuple2<GenericResponse, String>> value) throws Throwable {
-                            log.info("res {}", value);
-
-                            if (request.getRequestType() == TransactionType.ROLLBACK) {
-                                log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}", request.getGameId(),
-                                        request.getTxnId());
-                            }
-                        }
-                    })
-                    .map(tuple2s -> {
-                        Map<String, Object> processedTxIds = new HashMap<>();
-                        AtomicLong balance = new AtomicLong();
-                        tuple2s.forEach(tuple2 -> {
-                            GenericResponse res = tuple2.getT1();
-                            String orgTxId = tuple2.getT2();
-
-                            balance.set(res.getResult().getBalance());
-                            if (res.getResult().transaction_id != null) {
-                                processedTxIds.put(orgTxId, res.getResult().transaction_id);
-                            }
-
-                            /*
-                             * if (request.getRequestType() == TransactionType.ROLLBACK) {
-                             * log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}",
-                             * request.getGameId(), request.getTxnId());
-                             * }
-                             */
-                        });
-
-                        Wallet wallet = new Wallet();
-                        wallet.setCurrency(cu.getCurrencyCode());
-                        wallet.setTotalBalance(Money.ofMinor(cu, balance.get()).getNumberStripped());
-                        wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
-                                .total(wallet.getTotalBalance()));
-                        wallet.setBonus(
-                                new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
-
-                        response.setWallet(wallet);
-                        response.setProcessedTxnIds(processedTxIds);
-                        // response.setWallet(wallet);
-
-                        return response;
-                    })
-                    .tap(() -> new DefaultSignalListener<PlayerTransactionResponse>() {
-                        @Override
-                        public void doOnNext(PlayerTransactionResponse value) throws Throwable {
-                            log.info("Player transaction service response {}", value);
-                        }
-
-                        @Override
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.error("failed!", error);
-                        }
-                    });
-        }
-
-        public Mono<PlayerTransactionResponse> rollback(PlayerTransactionRequest request) {
-
-            PlayerTransactionResponse response = new PlayerTransactionResponse();
-            CurrencyUnit cu = Monetary.getCurrency(request.getCurrency());
-
-            return processTxn(getWebClient(),
-                    request.getToken(),
-                    request.getInternalToken(),
-                    request.getTxnId(),
-                    request.getGameId(),
-                    request.getGameVersion(),
-                    request.getPlayerId(),
-                    cu,
-                    request.getDebit(),
-                    TransactionType.ROLLBACK,
-                    request.getGameRoundId(),
-                    request.getOrgTxnUid(),
-                    request.getOrgTxnAmount(),
-                    true)
-                    .map(tuple2 -> {
-                        Map<String, Object> processedTxIds = new HashMap<>();
-                        AtomicLong balance = new AtomicLong();
-
-                        // log.info("tuple2 {}", tuple2);
-                        GenericResponse res = tuple2.getT1();
-                        String orgTxId = tuple2.getT2();
-                        balance.set(res.getResult().getBalance());
-                        if (res.getResult().getTransaction_id() != null) {
-                            processedTxIds.put(orgTxId, res.getResult().getTransaction_id());
-                            log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}", request.getGameId(),
-                                    request.getTxnId());
-                            // response.setRollbackTxnId(res.getProcessedTxId());
-                        }
-
-                        Wallet wallet = new Wallet();
-                        wallet.setCurrency(cu.getCurrencyCode());
-                        wallet.setTotalBalance(Money.ofMinor(cu, balance.get()).getNumberStripped());
-                        wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
-                                .total(wallet.getTotalBalance()));
-                        wallet.setBonus(
-                                new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
-
-                        response.setWallet(wallet);
-                        response.setProcessedTxnIds(processedTxIds);
-                        // response.setWallet(wallet);
-                        // log.info("parimatch service response {}", response);
-                        return response;
-                    });
-        }
-
-        @Override
-        public Mono<Void> keepSessionAlive(GameSession session) {
-
-            long startMillis = System.currentTimeMillis();
-
-            GenericRequest.Args args = new GenericRequest.Args();
-            addCallerIdAndPassword(args);
-            args.setToken(session.getToken());
-            args.setTimestamp(System.currentTimeMillis());
-
-            GenericRequest getBalanceRequest = new GenericRequest("tokenRefresh",
-                    new GenericRequest.Mirror(UUID.randomUUID().toString()));
-            getBalanceRequest.setArgs(args);
-
-            return getWebClient()
-                    .post()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(getBalanceRequest)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, PAMErrorsUtils::handleError)
-                    .bodyToMono(GenericResponse.class)
-                    // .publishOn(Schedulers.parallel())
-                    .tap(() -> new DefaultSignalListener<GenericResponse>() {
-
-                        public void doFinally(SignalType terminationType) throws Throwable {
-                            log.info("Elapsed Time: {}ms", System.currentTimeMillis() - startMillis);
-                        }
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.error("BFgames playerInfo request failed.", error);
-                        }
-                    })
-                    .doOnNext(genericResponse -> {
-
-                        if (genericResponse.getResult().errorcode == null
-                                && genericResponse.getResult().getToken() != null
-                                && !genericResponse.getResult().getToken().equals(session.getToken())) {
-                            String token = genericResponse.getResult().getToken();
-                            GameSession newSession = session.copy();
-                            newSession.setToken(token);
-                            gameSessionService.create(newSession)
-                                    .flatMap(oldSession -> {
-                                        session.setStatus(Status.INACTIVE);
-                                        return gameSessionService.update(session)
-                                                .flatMap(gameSession -> {
-                                                    return reactiveRedisTemplate.opsForList()
-                                                            .rightPush("default-active-sessions",
-                                                                    gameSession.getToken());
-                                                });
-                                    }).subscribeOn(Schedulers.boundedElastic())
-                                    .subscribe();
-                        }
-                    })
-                    .tap(() -> new DefaultSignalListener<>() {
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.info("Error creating player initialise response object.", error);
-                            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, error);
-                        }
-                    })
-                    .then();
-        }
+    @Data
+    @AllArgsConstructor
+    private static final class TxnResult {
+        String requestTxnId;
+        GenericResponse response;
     }
 
     @Data
@@ -901,26 +631,23 @@ public class BFGamesPlayerServiceAdaptor
             String caller_id;
             String caller_password;
             String token;
-            String external_session_id;
             String operator_id;
             long timestamp;
-            long original_timestamp;
             String currency;
             String game_ref;
             String game_ver = "1.0.0";
             long amount;
             long withdraw_amount;
             String withdraw_action_id;
-            long withdraw_action_timestamp;
             String round_id;
             boolean offline;
             boolean end_round;
             String action_id;
-            String bonus_id;
-            boolean bonus_done;
-            String bonus_instance_id;
-            ProgressiveContribution[] progressive_contributions;
-            ProgressiveWinning[] progressive_winnings;
+
+            public Args setOffline(boolean offline) {
+                this.offline = offline;
+                return this;
+            }
         }
 
         @Data
@@ -928,24 +655,6 @@ public class BFGamesPlayerServiceAdaptor
         @JsonInclude(JsonInclude.Include.NON_NULL)
         static class Mirror {
             String id;
-        }
-
-        @Data
-        @JsonInclude(JsonInclude.Include.NON_NULL)
-        static class ProgressiveContribution {
-            String progressive_id;
-            String amount;
-            String denominator;
-        }
-
-        @Data
-        @JsonInclude(JsonInclude.Include.NON_NULL)
-        static class ProgressiveWinning {
-            String progressive_id;
-            String amount;
-
-            String pot_amount;
-            String denominator;
         }
     }
 
@@ -970,12 +679,10 @@ public class BFGamesPlayerServiceAdaptor
             String errorcode;
             String currency;
             String token;
-            int balance;
+            long balance;
             String transaction_id;
             String player_id;
             String nickname;
         }
-
     }
-
 }

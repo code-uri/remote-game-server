@@ -16,3 +16,7 @@ include 'server'
 include 'game-providers'
 include 'game-providers:mplaygames'
 include 'game-providers:qubitgames'
+
+
+include 'operators'
+include 'operators:bf-games'

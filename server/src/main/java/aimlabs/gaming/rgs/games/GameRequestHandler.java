@@ -46,6 +46,7 @@ import aimlabs.gaming.rgs.gamesessions.GameSessionContext;
 import aimlabs.gaming.rgs.gamesessions.GameSessionService;
 import aimlabs.gaming.rgs.gameskins.GameLaunchRequest;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
+import aimlabs.gaming.rgs.gameskins.IGameLaunchService;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.gamesupplier.IGameSupplierService;
 import aimlabs.gaming.rgs.players.Player;
@@ -58,7 +59,7 @@ import lombok.extern.slf4j.Slf4j;
 @Data
 @Slf4j
 @Component
-public class GameRequestHandler {
+public class GameRequestHandler implements IGameLaunchService{
 
     @Autowired
     GameSupplierLocator gameSupplierLocator;

@@ -2,24 +2,19 @@ package in.aimlabs.gaming.gconnect.bfgames.controller;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import in.aimlabs.gaming.rgs.gameskin.GameLaunchRequest;
-import in.aimlabs.gaming.dto.GamePlayMode;
-import in.aimlabs.gaming.services.IGameLaunchService;
-import in.aimlabs.money.currency.service.CurrencyService;
-import aimlabs.gaming.rgs.core.utils.TapOnNextSignalListener;
+import aimlabs.gaming.rgs.gameskins.GameLaunchRequest;
+import aimlabs.gaming.rgs.gameskins.GamePlayMode;
+import aimlabs.gaming.rgs.gameskins.IGameLaunchService;
+import aimlabs.gaming.rgs.currency.ICurrencyService;
 import in.aimlabs.gaming.gconnect.bfgames.service.BFGamesPlayerServiceAdaptor;
 
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.lang.Nullable;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.util.UriComponentsBuilder;
-import reactor.core.observability.DefaultSignalListener;
-import reactor.core.publisher.Mono;
 
 import java.net.URI;
 import java.util.Arrays;
@@ -38,9 +33,63 @@ public class BFGamesConnectController {
     BFGamesPlayerServiceAdaptor gamesPlayerServiceAdaptor;
 
     @Autowired
-    CurrencyService currencyService;
+    ICurrencyService currencyService;
 
-    @AllArgsConstructor
+    @GetMapping(value = { "/games" })
+    public List<GameData> getGames(@RequestParam String currency) {
+        return gamesPlayerServiceAdaptor.getGames(currency);
+    }
+
+    @GetMapping(value = { "/currencies" })
+    public List<CurrencyInfo> getCurrencies() {
+        return currencyService.findAllISOCurrencies().stream()
+                .filter(c -> !"crypto".equals(c.getType()))
+                .map(c -> new CurrencyInfo(c.getCode()))
+                .toList();
+    }
+
+    @PostMapping(value = { "/sessions" })
+    public GameLaunchResponse launch(
+            @RequestBody LaunchRequest launchRequest,
+            @RequestHeader(value = "User-Agent", required = false) String userAgent) {
+        boolean isDemo = "DEMO".equals(launchRequest.getGameMode());
+        log.info("launch request userAgent={} payload={}", userAgent, launchRequest);
+
+        GameLaunchRequest gameLaunchRequest = new GameLaunchRequest();
+        gameLaunchRequest.setToken(isDemo ? "DEMO-" + UUID.randomUUID() : launchRequest.token);
+        gameLaunchRequest.setIpAddress(launchRequest.getIp());
+        gameLaunchRequest.setBrand(launchRequest.getOperatorId() != null
+                ? launchRequest.getOperatorId()
+                : "bfgames");
+        gameLaunchRequest.setGameId(launchRequest.getGameId());
+        gameLaunchRequest.setLanguage(launchRequest.getLocale());
+        gameLaunchRequest.setLocale(launchRequest.getLocale());
+        gameLaunchRequest.setDemo(isDemo);
+        gameLaunchRequest.setGamePlayMode(isDemo ? GamePlayMode.DEMO : GamePlayMode.REAL);
+        gameLaunchRequest.setDepositUrl(launchRequest.getCashierUrl());
+        gameLaunchRequest.setLobbyUrl(launchRequest.getLobbyUrl());
+        gameLaunchRequest.getParams().put("playerId", launchRequest.getPlayerId());
+        gameLaunchRequest.getParams().put("currency", launchRequest.getCurrency());
+        gameLaunchRequest.setInitSession(true);
+        gameLaunchRequest.setPlayer(launchRequest.getPlayerId());
+        gameLaunchRequest.setCurrency(launchRequest.getCurrency());
+
+        URI location = gameLaunchService.launchGame(gameLaunchRequest);
+        log.info("BFgames game url {}", location);
+
+        MultiValueMap<String, String> queryParams = UriComponentsBuilder
+                .fromUriString(location.toString()).build().getQueryParams();
+        GameLaunchResponse response = new GameLaunchResponse();
+        response.setGameUrl(location.toString());
+        response.setSessionId(queryParams.getFirst("token"));
+        response.setVersion(queryParams.getFirst("version"));
+        log.info("{}", response);
+        return response;
+    }
+
+
+
+        @AllArgsConstructor
     @Data
     public static class CurrencyInfo {
         String iso;
@@ -153,109 +202,5 @@ public class BFGamesConnectController {
         String gameUrl;
         String sessionId;
         String version;
-    }
-
-    @GetMapping(value = { "/games" })
-    public Mono<List<GameData>> getGames(
-            @RequestParam String currency,
-            ServerWebExchange exchange) {
-
-        return gamesPlayerServiceAdaptor.getGames(currency)
-
-                .checkpoint("BFgames get games request.", true);
-
-    }
-
-    @GetMapping(value = { "/currencies" })
-    public Mono<List<CurrencyInfo>> getCurrencies(
-            ServerWebExchange exchange) {
-
-        log.info("Headers {}", exchange.getRequest().getHeaders());
-        return currencyService.findAllISOCurrencies()
-                .filter(currencyDocument -> !"crypto".equals(currencyDocument.getType()))
-                .map(currencyDocument -> new CurrencyInfo(currencyDocument.getCode())).collectList()
-                .checkpoint("BFgames get currencies request.", true);
-
-    }
-
-    @PostMapping(value = { "/sessions" })
-    public Mono<GameLaunchResponse> launch(
-            @RequestBody LaunchRequest launchRequest,
-            ServerWebExchange exchange,
-            @RequestHeader(value = "User-Agent", required = false) String userAgent) {
-        ServerHttpRequest request = exchange.getRequest();
-        boolean isDemo = "DEMO".equals(launchRequest.getGameMode());
-        return Mono.just(request)
-                .tap(() -> new TapOnNextSignalListener<ServerHttpRequest>() {
-                    public void doOnNext(ServerHttpRequest request) throws Throwable {
-                        log.info("launch request path {} \t\t {} \t\t  headers {} ",
-                                request.getPath(), launchRequest, request.getHeaders());
-                    }
-                })
-                .flatMap(unused -> {
-                    GameLaunchRequest gameLaunchRequest = new GameLaunchRequest();
-                    // casino_id + user_id + currency + game
-                    // String token = launchRequest.getCasino_id() + "-" +
-                    // launchRequest.getUser().id + "-" +
-                    // launchRequest.getCurrency() + "-" + launchRequest.getGame();
-                    gameLaunchRequest.setToken(isDemo ? "DEMO-" + UUID.randomUUID() : launchRequest.token);
-                    // gameLaunchRequest.setPartner(partner);
-                    gameLaunchRequest.setIpAddress(launchRequest.getIp());
-                    gameLaunchRequest.setBrand(launchRequest.getOperatorId() != null
-                            ? launchRequest.getOperatorId()
-                            : "bfgames");
-                    gameLaunchRequest.setGameId(launchRequest.getGameId());
-                    gameLaunchRequest.setLanguage(launchRequest.getLocale());
-                    gameLaunchRequest.setLocale(launchRequest.getLocale());
-                    gameLaunchRequest.setDemo(isDemo);
-                    gameLaunchRequest.setGamePlayMode(isDemo ? GamePlayMode.DEMO : GamePlayMode.REAL);
-                    gameLaunchRequest.setDepositUrl(launchRequest.getCashierUrl());
-                    gameLaunchRequest.setLobbyUrl(launchRequest.getLobbyUrl());
-                    gameLaunchRequest.getParams().put("playerId", launchRequest.getPlayerId());
-                    gameLaunchRequest.getParams().put("currency", launchRequest.getCurrency());
-                    // if (!isDemo) {
-                    gameLaunchRequest.setInitSession(true);
-                    gameLaunchRequest.setPlayer(launchRequest.getPlayerId());
-                    gameLaunchRequest.setCurrency(launchRequest.getCurrency());
-                    // }
-
-                    /*
-                     * String remoteHost = request.getHeaders().getFirst("X-Forwarded-Host");
-                     * if (remoteHost == null)
-                     * remoteHost = request.getRemoteAddress().getAddress().getHostName();
-                     * if (remoteHost.contains(","))
-                     * remoteHost = remoteHost.split(",")[0];
-                     * String finalRemoteHost = remoteHost;
-                     */
-
-                    return gameLaunchService
-                            .launchGame(gameLaunchRequest)
-                            .map(uri -> {
-                                String gameUrlPath = uri.toString();
-                                return URI.create(gameUrlPath);
-                            })
-                            .tap(() -> (TapOnNextSignalListener<URI>) location -> {
-                                log.info("BFgames game url {}", location);
-                            })
-                            .map(location -> {
-                                MultiValueMap<String, String> queryParams = UriComponentsBuilder
-                                        .fromUriString(location.toString()).build().getQueryParams();
-                                GameLaunchResponse response = new GameLaunchResponse();
-                                response.setGameUrl(location.toString());
-
-                                response.setSessionId(queryParams.getFirst("token"));
-                                response.setVersion(queryParams.getFirst("version"));
-                                return response;
-                            })
-                            .tap(() -> new DefaultSignalListener<GameLaunchResponse>() {
-                                @Override
-                                public void doOnNext(GameLaunchResponse response) {
-                                    log.info("{}", response);
-                                }
-                            });
-                })
-
-                .checkpoint("BFgames launch request.", true);
-
     }
 }
