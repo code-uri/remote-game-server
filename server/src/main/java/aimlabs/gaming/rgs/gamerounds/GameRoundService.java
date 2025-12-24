@@ -268,6 +268,7 @@ public class GameRoundService extends AbstractEntityService<GameRound, GameRound
 ////                return Mono.error(new BaseException(SystemErrorCode.SYSTEM_ERROR, throwable.getMessage()));
 ////            }
 //            else
+
         if(throwable instanceof BaseRuntimeException e && e.getErrorCode() == SystemErrorCode.GAME_ROUND_CANCELLED){
             throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, throwable.getMessage());
         }

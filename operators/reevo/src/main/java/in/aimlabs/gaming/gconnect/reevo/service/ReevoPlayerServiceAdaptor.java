@@ -110,6 +110,16 @@ public class ReevoPlayerServiceAdaptor
 
     class ReevoPlayerServiceConnector implements PlayerAccountManager {
 
+        private static final class RetryableException extends RuntimeException {
+            private RetryableException(String message) {
+                super(message);
+            }
+
+            private RetryableException(String message, Throwable cause) {
+                super(message, cause);
+            }
+        }
+
         private final Connector connector;
 
         ReevoPlayerServiceConnector(Connector connector) {
@@ -186,7 +196,7 @@ public class ReevoPlayerServiceAdaptor
                 try {
                     return supplier.get();
                 } catch (Throwable t) {
-                    boolean canRetry = attempt < maxRetries && (retryAllThrowables || t instanceof RuntimeException);
+                    boolean canRetry = attempt < maxRetries && (retryAllThrowables || t instanceof RetryableException);
                     if (!canRetry) {
                         if (t instanceof RuntimeException re) {
                             throw re;
@@ -483,15 +493,52 @@ public class ReevoPlayerServiceAdaptor
             long startMillis = System.currentTimeMillis();
 
             boolean retryAllThrowables = (type == TransactionType.CREDIT || type == TransactionType.ROLLBACK);
-            GetBalanceResponse res = executeWithRetry(
-                    "transaction " + type,
-                    retryAllThrowables,
-                    () -> getForBalanceResponse(url));
+            GetBalanceResponse res;
+            try {
+                res = executeWithRetry(
+                        "transaction " + type,
+                        retryAllThrowables,
+                        () -> {
+                            try {
+                                GetBalanceResponse r = getForBalanceResponse(url);
+                                if (type == TransactionType.DEBIT) {
+                                    if (r.status == 403) {
+                                        throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, r.msg);
+                                    }
+                                    if (r.status == 500) {
+                                        throw new RetryableException(r.msg != null ? r.msg : "reevo status 500");
+                                    }
+                                } else if (type == TransactionType.CREDIT) {
+                                    if (r.status != 200) {
+                                        // Treat 500 and all unknown statuses as malfunction: retry and then fail.
+                                        String msg = r.msg != null ? r.msg : ("reevo status " + r.status);
+                                        throw new RetryableException(msg);
+                                    }
+                                }
+                                return r;
+                            } catch (BaseRuntimeException e) {
+                                if ((type == TransactionType.DEBIT || type == TransactionType.CREDIT)
+                                        && (e.getErrorCode() == SystemErrorCode.COM_ERROR
+                                        || e.getErrorCode() == SystemErrorCode.EMPTY_RESPONSE)) {
+                                    throw new RetryableException("transient error", e);
+                                }
+                                throw e;
+                            }
+                        });
+            } catch (RetryableException e) {
+                if (type == TransactionType.DEBIT) {
+                    throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND, e);
+                }
+                if (type == TransactionType.CREDIT) {
+                    throw new BaseRuntimeException(SystemErrorCode.COM_ERROR, e.getMessage(), e);
+                }
+                throw e;
+            }
 
             log.info("Reevo transaction {} elapsed Time: {}ms", txnId, System.currentTimeMillis() - startMillis);
 
             if (type == TransactionType.DEBIT && res.getStatus() != 200) {
-                throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND, res.getMsg());
+                throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, res.getMsg());
             }
 
             return new TxnResult(res, txnId);
