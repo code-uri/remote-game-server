@@ -1,13 +1,19 @@
 package in.aimlabs.gaming.gconnect.parimatch.services.impl;
 
-import in.aimlabs.gaming.AbstractConnectorWebClientBuilderService;
-import in.aimlabs.gaming.services.PlayerAccountManager;
-import in.aimlabs.gaming.services.PlayerAccountManagerFactory;
-import in.aimlabs.gaming.dto.*;
-import in.aimlabs.gaming.utils.PAMErrorsUtils;
 import aimlabs.gaming.rgs.connectors.Connector;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
+import aimlabs.gaming.rgs.gameoperators.Balance;
+import aimlabs.gaming.rgs.gameoperators.PlayerAccountManager;
+import aimlabs.gaming.rgs.gameoperators.PlayerAccountManagerFactory;
+import aimlabs.gaming.rgs.gameoperators.PlayerBalanceRequest;
+import aimlabs.gaming.rgs.gameoperators.PlayerInitialiseRequest;
+import aimlabs.gaming.rgs.gameoperators.PlayerInitialiseResponse;
+import aimlabs.gaming.rgs.gameoperators.PlayerTransactionRequest;
+import aimlabs.gaming.rgs.gameoperators.PlayerTransactionResponse;
+import aimlabs.gaming.rgs.gameoperators.Wallet;
+import aimlabs.gaming.rgs.gamerounds.GameRoundStatusEnum;
+import aimlabs.gaming.rgs.transactions.TransactionType;
 import in.aimlabs.gaming.gconnect.parimatch.dto.ParimatchPlayerInfoRequest;
 import in.aimlabs.gaming.gconnect.parimatch.dto.ParimatchPlayerInfoResponse;
 import in.aimlabs.gaming.gconnect.parimatch.dto.ParimatchTransactionRequest;
@@ -18,31 +24,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.observability.DefaultSignalListener;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
-import reactor.core.scheduler.Schedulers;
-import reactor.netty.http.client.HttpClient;
-import reactor.retry.Retry;
-import reactor.util.function.Tuple2;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import javax.money.CurrencyUnit;
 import javax.money.Monetary;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static reactor.util.retry.Retry.withThrowable;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 @Component
 @Qualifier("parimatch")
@@ -67,9 +65,7 @@ public class ParimatchPlayerServiceAdaptor
     private String transactionRetries;
 
     @Autowired
-    WebClient.Builder webClientBuilder;
-    @Autowired
-    private HttpClient httpClient; // 1. Inject the shared HttpClient bean
+    private RestClient restClient;
 
     @Override
     public boolean supports(Connector connector) {
@@ -82,96 +78,219 @@ public class ParimatchPlayerServiceAdaptor
         return new PlayerServiceConnector(connector);
     }
 
-    class PlayerServiceConnector extends AbstractConnectorWebClientBuilderService implements PlayerAccountManager {
+    class PlayerServiceConnector implements PlayerAccountManager {
+
+        private final Connector connector;
 
         PlayerServiceConnector(Connector connector) {
-            super(webClientBuilder, connector, httpClient);
+            this.connector = connector;
         }
 
-        public Mono<PlayerInitialiseResponse> playerInitialise(PlayerInitialiseRequest request) {
+        private String getSettingAsString(String key) {
+            Object v = connector != null && connector.getSettings() != null ? connector.getSettings().get(key) : null;
+            return v != null ? v.toString() : null;
+        }
+
+        private String getCid() {
+            String v = getSettingAsString("cid");
+            return (v != null && !v.isBlank()) ? v : ParimatchPlayerServiceAdaptor.this.cid;
+        }
+
+        private String getXHubConsumer() {
+            String v = getSettingAsString("x-hub-consumer");
+            if (v == null || v.isBlank()) {
+                v = getSettingAsString("xHubConsumer");
+            }
+            return (v != null && !v.isBlank()) ? v : ParimatchPlayerServiceAdaptor.this.xHubConsumer;
+        }
+
+        private String getBaseUrl() {
+            String v = connector != null ? connector.getBaseUrl() : null;
+            if (v == null || v.isBlank()) {
+                v = getSettingAsString("baseUrl");
+            }
+            if (v == null || v.isBlank()) {
+                v = ParimatchPlayerServiceAdaptor.this.baseUrl;
+            }
+            return v;
+        }
+
+        private String buildUrl(String path) {
+            String root = getBaseUrl();
+            if (root == null || root.isBlank()) {
+                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR, "Missing parimatch baseUrl");
+            }
+            if (root.endsWith("/")) {
+                root = root.substring(0, root.length() - 1);
+            }
+            String p = (path == null || path.isBlank()) ? "/" : path;
+            if (!p.startsWith("/")) {
+                p = "/" + p;
+            }
+            return root + p;
+        }
+
+        private <TReq, TRes> TRes postForObject(String path, TReq body, Class<TRes> responseType) {
+            long startMillis = System.currentTimeMillis();
+            String url = buildUrl(path);
+            try {
+                TRes response = restClient
+                        .post()
+                        .uri(url)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .header("X-Hub-Consumer", getXHubConsumer())
+                        .body(body)
+                        .retrieve()
+                        .body(responseType);
+
+                if (response == null) {
+                    throw new BaseRuntimeException(SystemErrorCode.EMPTY_RESPONSE,
+                            "parimatch returned empty response for " + path);
+                }
+
+                log.info("HTTP {} -> {} elapsed={}ms", path, responseType.getSimpleName(),
+                        System.currentTimeMillis() - startMillis);
+                return response;
+            } catch (RestClientResponseException e) {
+                log.error("Parimatch HTTP error calling {} for body {}", path, body, e);
+                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR,
+                        "parimatch http " + e.getRawStatusCode() + " calling " + path, e);
+            } catch (RestClientException e) {
+                log.error("Parimatch REST error calling {} for body {}", path, body, e);
+                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR,
+                        "parimatch error calling " + path, e);
+            } catch (BaseRuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("Parimatch unexpected error calling {} for body {}", path, body, e);
+                throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR,
+                        "parimatch unexpected error calling " + path, e);
+            }
+        }
+
+        private int getMaxRetries() {
+            try {
+                return Integer.parseInt(transactionRetries);
+            } catch (Exception ignored) {
+                return 3;
+            }
+        }
+
+        private static long computeBackoffMillis(int attempt) {
+            long base = 1_000L;
+            long max = 5_000L;
+            long exp = base * (1L << Math.min(10, Math.max(0, attempt - 1)));
+            long capped = Math.min(max, exp);
+            long jitter = ThreadLocalRandom.current().nextLong(0, 251);
+            return Math.min(max, capped + jitter);
+        }
+
+        private static void sleepQuietly(long millis) {
+            try {
+                Thread.sleep(millis);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "Interrupted", ie);
+            }
+        }
+
+        private boolean shouldRetry(Throwable t, boolean retryAllThrowables) {
+            if (!retryAllThrowables && !(t instanceof RuntimeException)) {
+                return false;
+            }
+
+            if (t instanceof BaseRuntimeException bre) {
+                if (bre.getErrorCode() == SystemErrorCode.INVALID_REQUEST) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private <T> T executeWithRetry(String op, boolean retryAllThrowables, Supplier<T> supplier) {
+            int maxRetries = Math.max(1, getMaxRetries());
+            int attempt = 0;
+            while (true) {
+                attempt++;
+                try {
+                    return supplier.get();
+                } catch (Throwable t) {
+                    boolean canRetry = attempt < maxRetries && shouldRetry(t, retryAllThrowables);
+                    if (!canRetry) {
+                        if (t instanceof RuntimeException re) {
+                            throw re;
+                        }
+                        throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, op + " failed", t);
+                    }
+
+                    long delayMs = computeBackoffMillis(attempt);
+                    log.warn("Parimatch retry op={} attempt={} delayMs={} error={}", op, attempt, delayMs,
+                            t.toString());
+                    sleepQuietly(delayMs);
+                }
+            }
+        }
+
+        private record TxnResult(ParimatchTransactionResponse response, String orgTxId) {
+        }
+
+        @Override
+        public PlayerInitialiseResponse playerInitialise(PlayerInitialiseRequest request) {
             long startMillis = System.currentTimeMillis();
             ParimatchPlayerInfoRequest infoRequest = new ParimatchPlayerInfoRequest();
-            infoRequest.setCid((String) getAttribute("cid"));
+            infoRequest.setCid(getCid());
             infoRequest.setSessionToken(request.getSessionToken());
-            /*
-             * return getWebClient()
-             * .tap(() -> (TapOnNextSignalListener<WebClient>) webClient -> {
-             * log.info("Request for game: {}", gameId);
-             * log.info(" {}", infoRequest);
-             * })
-             * .flatMap(webClient -> {
-             */
 
-            return getWebClient()
-                    .post()
-                    .uri("/playerInfo")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Hub-Consumer", getXHubConsumer())
-                    .bodyValue(infoRequest)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, PAMErrorsUtils::handleError)
-                    .bodyToMono(ParimatchPlayerInfoResponse.class)
-                    // .publishOn(Schedulers.parallel())
-                    .retryWhen(withThrowable(Retry.anyOf(RuntimeException.class)
-                            .exponentialBackoffWithJitter(Duration.ofSeconds(1), Duration.ofSeconds(5))
-                            .retryMax(Long.parseLong(transactionRetries))))
-                    .tap(() -> new DefaultSignalListener<ParimatchPlayerInfoResponse>() {
+            ParimatchPlayerInfoResponse playerInfo = executeWithRetry(
+                    "playerInfo",
+                    false,
+                    () -> postForObject("/playerInfo", infoRequest, ParimatchPlayerInfoResponse.class)
+            );
 
-                        public void doFinally(SignalType terminationType) throws Throwable {
-                            log.info("Elapsed Time: {}ms", System.currentTimeMillis() - startMillis);
-                        }
+            try {
+                PlayerInitialiseResponse res = new PlayerInitialiseResponse();
+                res.setCurrency(playerInfo.getCurrency());
+                res.setPlayerId(playerInfo.getPlayerId());
 
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.error("Parimatch playerInfo request failed.", error);
-                        }
-                    })
-                    .map(playerInfo -> {
-                        PlayerInitialiseResponse res;
-                        res = new PlayerInitialiseResponse();
-                        res.setCurrency(playerInfo.getCurrency());
-                        res.setPlayerId(playerInfo.getPlayerId());
-
-                        res.setTotalBalance(
-                                BigDecimal.valueOf(playerInfo.getBalance() / 100).setScale(2, RoundingMode.HALF_UP));
-                        res.setCash(new Balance().amount(res.getTotalBalance()).onHold(BigDecimal.ZERO)
-                                .total(res.getTotalBalance()));
-                        res.setBonus(
-                                new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
-                        res.setExternalToken(request.getSessionToken());
-                        return res;
-                    })
-                    .tap(() -> new DefaultSignalListener<PlayerInitialiseResponse>() {
-
-                        public void doOnError(Throwable error) throws Throwable {
-                            log.info("Error creating player initialise response object.", error);
-                            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, error);
-                        }
-                    });
+                res.setTotalBalance(
+                        BigDecimal.valueOf(playerInfo.getBalance() / 100).setScale(2, RoundingMode.HALF_UP));
+                res.setCash(new Balance().amount(res.getTotalBalance()).onHold(BigDecimal.ZERO)
+                        .total(res.getTotalBalance()));
+                res.setBonus(
+                        new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+                res.setExternalToken(request.getSessionToken());
+                return res;
+            } catch (RuntimeException e) {
+                log.info("Error creating player initialise response object.", e);
+                throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, e);
+            } finally {
+                log.info("Elapsed Time: {}ms", System.currentTimeMillis() - startMillis);
+            }
 
         }
 
-        public Mono<Wallet> playerBalance(PlayerBalanceRequest request) {
+        @Override
+        public Wallet playerBalance(PlayerBalanceRequest request) {
             PlayerInitialiseRequest playerInitialiseRequest = new PlayerInitialiseRequest();
             playerInitialiseRequest.setCurrency(request.getCurrency());
             playerInitialiseRequest.setPlayer(request.getPlayer());
             playerInitialiseRequest.setGameId(request.getGameId());
             playerInitialiseRequest.setSessionToken(request.getToken());
-            return playerInitialise(playerInitialiseRequest).map(PlayerInitialiseResponse::getWallet);
+            return playerInitialise(playerInitialiseRequest).getWallet();
         }
 
-        public Mono<PlayerTransactionResponse> playerTransaction(PlayerTransactionRequest request) {
+        @Override
+        public PlayerTransactionResponse playerTransaction(PlayerTransactionRequest request) {
             PlayerTransactionResponse response = new PlayerTransactionResponse();
             CurrencyUnit cu = Monetary.getCurrency(request.getCurrency());
 
-            PlayerGameTransaction zero = new PlayerGameTransaction();
-            zero.setAmount(BigDecimal.ZERO);
-
-            String cid = (String) getAttribute("cid");
+            String cid = getCid();
             TransactionType type = request.getRequestType();
-            List<Mono<Tuple2<ParimatchTransactionResponse, String>>> txsFlux = new ArrayList<>();
+            List<TxnResult> processed = new ArrayList<>();
             if (type == TransactionType.ROLLBACK) {
-                txsFlux.add(processTxn(request.getTxnId(), request.getToken(),
+                processed.add(processTxn(request.getTxnId(), request.getToken(),
                         request.getGameId(),
                         request.getPlayerId(),
                         cu,
@@ -182,7 +301,7 @@ public class ParimatchPlayerServiceAdaptor
                 if (type == TransactionType.CREDIT) {
                     if (request.getCredit() == null) {
                         log.info("No wins for gameRound {}. sending zero wins request ", request.getGameRoundId());
-                        txsFlux.add(processTxn(request.getTxnId(), request.getToken(),
+                        processed.add(processTxn(request.getTxnId(), request.getToken(),
                                 request.getGameId(),
                                 request.getPlayerId(),
                                 cu,
@@ -191,7 +310,7 @@ public class ParimatchPlayerServiceAdaptor
                                 request.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED,
                                 cid));
                     } else {
-                        txsFlux.add(processTxn(request.getTxnId(), request.getToken(),
+                        processed.add(processTxn(request.getTxnId(), request.getToken(),
                                 request.getGameId(),
                                 request.getPlayerId(),
                                 cu,
@@ -205,7 +324,7 @@ public class ParimatchPlayerServiceAdaptor
                     if (request.getDebit() == null) {
                         request.setDebit(0D);
                     }
-                    txsFlux.add(processTxn(request.getTxnId(), request.getToken(),
+                    processed.add(processTxn(request.getTxnId(), request.getToken(),
                             request.getGameId(),
                             request.getPlayerId(),
                             cu,
@@ -215,95 +334,82 @@ public class ParimatchPlayerServiceAdaptor
                 }
 
             }
-            return Flux.concat(txsFlux)
-                    .collectList()
-                    .map(tuple2s -> {
-                        Map<String, Object> processedTxIds = new HashMap<>();
-                        AtomicLong balance = new AtomicLong();
-                        tuple2s.forEach(tuple2 -> {
-                            // log.info("tuple2 {}", tuple2);
-                            ParimatchTransactionResponse res = tuple2.getT1();
-                            String orgTxId = tuple2.getT2();
-                            balance.set(res.getBalance());
-                            if (res.getProcessedTxId() != null) {
-                                processedTxIds.put(orgTxId, res.getProcessedTxId());
-                                if (request.getRequestType() == TransactionType.ROLLBACK) {
-                                    log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}",
-                                            res.getRoundId(), res.getProcessedTxId());
-                                    response.setRollbackTxnId(res.getProcessedTxId());
-                                }
-                            }
-                        });
 
-                        Wallet wallet = new Wallet();
-                        wallet.setCurrency(cu.getCurrencyCode());
-                        wallet.setTotalBalance(
-                                BigDecimal.valueOf(balance.get() / 100).setScale(2, RoundingMode.HALF_UP));
-                        wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
-                                .total(wallet.getTotalBalance()));
-                        wallet.setBonus(
-                                new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+            Map<String, Object> processedTxIds = new HashMap<>();
+            AtomicLong balance = new AtomicLong();
+            processed.forEach(tx -> {
+                ParimatchTransactionResponse res = tx.response();
+                String orgTxId = tx.orgTxId();
+                balance.set(res.getBalance());
+                if (res.getProcessedTxId() != null) {
+                    processedTxIds.put(orgTxId, res.getProcessedTxId());
+                    if (request.getRequestType() == TransactionType.ROLLBACK) {
+                        log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}",
+                                res.getRoundId(), res.getProcessedTxId());
+                        response.setRollbackTxnId(res.getProcessedTxId());
+                    }
+                }
+            });
 
-                        response.setWallet(wallet);
-                        response.setProcessedTxnIds(processedTxIds);
-                        // response.setWallet(wallet);
-                        // log.info("parimatch service response {}", response);
-                        return response;
-                    });
+            Wallet wallet = new Wallet();
+            wallet.setCurrency(cu.getCurrencyCode());
+            wallet.setTotalBalance(
+                    BigDecimal.valueOf(balance.get() / 100).setScale(2, RoundingMode.HALF_UP));
+            wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
+                    .total(wallet.getTotalBalance()));
+            wallet.setBonus(
+                    new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+
+            response.setWallet(wallet);
+            response.setProcessedTxnIds(processedTxIds);
+            return response;
         }
 
-        public Mono<PlayerTransactionResponse> rollback(PlayerTransactionRequest request) {
+        @Override
+        public PlayerTransactionResponse rollback(PlayerTransactionRequest request) {
 
             PlayerTransactionResponse response = new PlayerTransactionResponse();
             CurrencyUnit cu = Monetary.getCurrency(request.getCurrency());
 
-            String cid = (String) getAttribute("cid");
+            String cid = getCid();
+            Double amount = request.getDebit() != null ? request.getDebit() : 0D;
 
-            String debitTxnId = request.getOrgTxnUid();
-            Double amount = request.getDebit();
-
-            TransactionType type = request.getRequestType();
-
-            return processTxn(request.getTxnId(), request.getToken(),
+            TxnResult tx = processTxn(request.getTxnId(), request.getToken(),
                     request.getGameId(),
                     request.getPlayerId(),
                     cu,
                     amount,
                     TransactionType.ROLLBACK, request.getGameRoundId(),
-                    true, cid)
-                    .map(tuple2 -> {
-                        Map<String, Object> processedTxIds = new HashMap<>();
-                        AtomicLong balance = new AtomicLong();
+                    true, cid);
 
-                        // log.info("tuple2 {}", tuple2);
-                        ParimatchTransactionResponse res = tuple2.getT1();
-                        String orgTxId = tuple2.getT2();
-                        balance.set(res.getBalance());
-                        if (res.getProcessedTxId() != null) {
-                            processedTxIds.put(orgTxId, res.getProcessedTxId());
-                            log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}", res.getRoundId(),
-                                    res.getProcessedTxId());
-                            response.setRollbackTxnId(res.getProcessedTxId());
-                        }
+            Map<String, Object> processedTxIds = new HashMap<>();
+            AtomicLong balance = new AtomicLong();
 
-                        Wallet wallet = new Wallet();
-                        wallet.setCurrency(cu.getCurrencyCode());
-                        wallet.setTotalBalance(
-                                BigDecimal.valueOf(balance.get() / 100).setScale(2, RoundingMode.HALF_UP));
-                        wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
-                                .total(wallet.getTotalBalance()));
-                        wallet.setBonus(
-                                new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+            ParimatchTransactionResponse res = tx.response();
+            String orgTxId = tx.orgTxId();
+            balance.set(res.getBalance());
+            if (res.getProcessedTxId() != null) {
+                processedTxIds.put(orgTxId, res.getProcessedTxId());
+                log.info("Rollback-ed gameRound {} successfully. rollbackTxnId {}", res.getRoundId(),
+                        res.getProcessedTxId());
+                response.setRollbackTxnId(res.getProcessedTxId());
+            }
 
-                        response.setWallet(wallet);
-                        response.setProcessedTxnIds(processedTxIds);
-                        // response.setWallet(wallet);
-                        // log.info("parimatch service response {}", response);
-                        return response;
-                    });
+            Wallet wallet = new Wallet();
+            wallet.setCurrency(cu.getCurrencyCode());
+            wallet.setTotalBalance(
+                    BigDecimal.valueOf(balance.get() / 100).setScale(2, RoundingMode.HALF_UP));
+            wallet.setCash(new Balance().amount(wallet.getTotalBalance()).onHold(BigDecimal.ZERO)
+                    .total(wallet.getTotalBalance()));
+            wallet.setBonus(
+                    new Balance().amount(BigDecimal.ZERO).onHold(BigDecimal.ZERO).total(BigDecimal.ZERO));
+
+            response.setWallet(wallet);
+            response.setProcessedTxnIds(processedTxIds);
+            return response;
         }
 
-        private Mono<Tuple2<ParimatchTransactionResponse, String>> processTxn(String txnId,
+        private TxnResult processTxn(String txnId,
                 String token,
                 String gameId,
                 String player,
@@ -322,14 +428,19 @@ public class ParimatchPlayerServiceAdaptor
             else if (type == TransactionType.ROLLBACK)
                 api = "/cancel";
             else
-                throw new BaseRuntimeException(PAMErrorCode.INVALID_REQUEST, "unsupported transaction " + type);
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "unsupported transaction " + type);
 
             ParimatchTransactionRequest parimatchRequest = new ParimatchTransactionRequest();
             parimatchRequest.setCid(cid);
             parimatchRequest.setSessionToken(token);
             parimatchRequest.setPlayerId(player);
             parimatchRequest.setProductId(gameId);
-            parimatchRequest.setAmount((long) amount.doubleValue() * 100);
+                BigDecimal major = BigDecimal.valueOf(amount != null ? amount : 0D);
+                long minor = major
+                    .movePointRight(2)
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .longValue();
+                parimatchRequest.setAmount(minor);
             parimatchRequest.setCurrency(cu.getCurrencyCode());
             parimatchRequest.setRoundClosed(roundClosed);
             parimatchRequest.setTxId(txnId);
@@ -337,34 +448,17 @@ public class ParimatchPlayerServiceAdaptor
 
             log.info("Parimatch player service. process transaction request {}", parimatchRequest);
             long startMillis = System.currentTimeMillis();
-            return getWebClient()
-                    .post()
-                    .uri(api)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Hub-Consumer", getXHubConsumer())
-                    .bodyValue(parimatchRequest)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, PAMErrorsUtils::handleError)
-                    .bodyToMono(ParimatchTransactionResponse.class)
-                    // .publishOn(Schedulers.parallel())
-                    .retryWhen(withThrowable(Retry.anyOf(type == TransactionType.CREDIT
-                            ? Throwable.class
-                            : RuntimeException.class)
-                            .exponentialBackoffWithJitter(Duration.ofSeconds(1), Duration.ofSeconds(5))
-                            .retryMax(Long.parseLong(transactionRetries))))
-                    .zipWith(Mono.just(parimatchRequest.getTxId() == null ? parimatchRequest.getRoundId()
-                            : parimatchRequest.getTxId()))
-                    .doOnError(throwable -> {
-                        log.error("Parimatch transaction {} failed.", parimatchRequest.getTxId(), throwable);
-                    })
-                    .doFinally(signalType -> {
-                        log.info("Mono signalType {}. Transaction {} elapsed Time: {}ms", signalType,
-                                parimatchRequest.getTxId(), System.currentTimeMillis() - startMillis);
-                    })
-                    .doOnNext(response -> {
-                        log.info("{}. Elapsed Time: {}ms", response, System.currentTimeMillis() - startMillis);
-                    });
+
+                boolean retryAllThrowables = (type == TransactionType.CREDIT);
+                ParimatchTransactionResponse response = executeWithRetry(
+                    "transaction " + api,
+                    retryAllThrowables,
+                    () -> postForObject(api, parimatchRequest, ParimatchTransactionResponse.class)
+                );
+
+                String orgTxId = parimatchRequest.getTxId() == null ? parimatchRequest.getRoundId() : parimatchRequest.getTxId();
+                log.info("Transaction {} elapsed Time: {}ms", orgTxId, System.currentTimeMillis() - startMillis);
+                return new TxnResult(response, orgTxId);
         }
     }
 }

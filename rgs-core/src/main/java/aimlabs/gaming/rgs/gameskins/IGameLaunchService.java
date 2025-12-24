@@ -2,6 +2,7 @@ package aimlabs.gaming.rgs.gameskins;
 
 
 import java.net.URI;
+import aimlabs.gaming.rgs.gameoperators.GameReplayRequest;
 
 /**
  * Blocking game launch abstraction used by bf-games connect endpoints.
@@ -11,4 +12,5 @@ import java.net.URI;
 public interface IGameLaunchService {
 
     URI launchGame(GameLaunchRequest gameLaunchRequest);
+    URI gameReplay(GameReplayRequest gameReplayRequest);
 }

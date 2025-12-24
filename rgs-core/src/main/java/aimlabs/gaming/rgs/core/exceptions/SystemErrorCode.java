@@ -1,6 +1,7 @@
 package aimlabs.gaming.rgs.core.exceptions;
 
 public enum SystemErrorCode implements ErrorCode {
+    GENERAL_API_ERROR("general.api.error", "General API Error", 400),
     NOT_IMPLEMENTED("system.notimplemented", "Not Implemented", 500),
     SYSTEM_ERROR("system.error", "System error", 500),
     NOT_FOUND("resource.not.found", "Resource not found", 404),

@@ -24,6 +24,7 @@ import aimlabs.gaming.rgs.settings.IGameSettingsService;
 import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import in.aimlabs.gaming.gconnect.bfgames.controller.BFGamesConnectController;
+import in.aimlabs.gaming.gconnect.bfgames.exceptions.SessionExpiredException;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
@@ -323,7 +324,20 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
             tokenAuthenticationRequest.setArgs(args);
 
             GenericResponse genericResponse = post(tokenAuthenticationRequest);
-            ensureOk(genericResponse, false);
+           
+
+            if(genericResponse.getResult().getErrorcode()!=null && !"0".equals(genericResponse.getResult().getErrorcode())) {
+                if ("2001" .equals(genericResponse.getResult().getErrorcode())) {
+                    throw new BaseRuntimeException(SystemErrorCode.TOKEN_EXPIRED);
+                }
+                if ("2003" .equals(genericResponse.getResult().getErrorcode())) {
+                    throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Player not logged in.");
+                } else if ("2002" .equals(genericResponse.getResult().getErrorcode())) {
+                    throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+                } else {
+                    throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR);
+                }
+            }
 
             PlayerInitialiseResponse res = new PlayerInitialiseResponse();
             res.setPlayerId(genericResponse.getResult().player_id);
@@ -353,7 +367,7 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
             getBalanceRequest.setArgs(args);
 
             GenericResponse genericResponse = post(getBalanceRequest);
-            ensureOk(genericResponse, false);
+            //ensureOk(genericResponse, false);
 
             CurrencyUnit cu = Monetary.getCurrency(genericResponse.getResult().currency);
             Money balance = Money.ofMinor(cu, genericResponse.getResult().balance);
@@ -405,8 +419,7 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
                     new GenericRequest.Mirror(UUID.randomUUID().toString()));
             terminateRequest.setArgs(args);
 
-            GenericResponse genericResponse = post(terminateRequest);
-            ensureOk(genericResponse, false);
+            post(terminateRequest);
         }
 
         private PlayerTransactionResponse creditOrClosed(PlayerTransactionRequest request) {
@@ -541,8 +554,37 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
                 throw e;
             }
 
-            ensureOk(response, type == TransactionType.DEBIT);
-            return new TxnResult(txnId, response);
+
+            String errorcode = response.getResult().errorcode;
+            if(errorcode==null){
+                return new TxnResult(txnId, response);
+            }
+        
+            if("1000".equals(errorcode)){
+                if(type == TransactionType.DEBIT)
+                    throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND, response.result.toString());
+
+                // This should not occur ideally because error 1000 will not be returned for Rollback request.
+                else if(type == TransactionType.ROLLBACK)
+                    throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, "Rollback gameRound "+request.getGameRoundId()+" failed!");
+                else// This should not occur ideally because operator send 1000 errocode only for debit requests.
+                    throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, "Cannot handle 1000 errorCode for txnType " + type);
+            }
+            else if(errorcode.startsWith("200")
+                    && !playRequest.getArgs().isOffline() //try offline deposit only if it is not an offline deposit request.
+                    && (type ==TransactionType.CREDIT || type== TransactionType.ROLLBACK )) {
+                throw new SessionExpiredException();//retry with offline deposit / rollback
+            }
+            else if(errorcode.equals("4000") &&  type == TransactionType.DEBIT){
+                throw new BaseRuntimeException(SystemErrorCode.INSUFFICIENT_BALANCE, errorcode);
+            }
+            //else if(errorcode.startsWith("300") || errorcode.startsWith("400"))
+            else if(errorcode.startsWith("300") || errorcode.startsWith("400")){
+                throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, errorcode);
+            }
+            else{
+                throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, "request failed with errorcode "+errorcode);
+            }
         }
 
         private GenericResponse post(GenericRequest request) {
@@ -559,33 +601,6 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
                 throw new BaseRuntimeException(SystemErrorCode.EMPTY_RESPONSE, "bf-games returned empty response");
             }
             return response;
-        }
-
-        private void ensureOk(GenericResponse response, boolean rollbackGameRoundOnError) {
-            String errorcode = response.getResult() == null ? null : response.getResult().errorcode;
-            if (errorcode == null || "0".equals(errorcode)) {
-                return;
-            }
-
-            if (rollbackGameRoundOnError) {
-                throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND,
-                        "bf-games errorcode=" + errorcode);
-            }
-
-            if ("2001".equals(errorcode)) {
-                throw new BaseRuntimeException(SystemErrorCode.TOKEN_EXPIRED);
-            }
-            if ("2002".equals(errorcode)) {
-                throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
-            }
-            if ("2003".equals(errorcode)) {
-                throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Player not logged in.");
-            }
-            if ("4000".equals(errorcode)) {
-                throw new BaseRuntimeException(SystemErrorCode.INSUFFICIENT_BALANCE);
-            }
-
-            throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "bf-games errorcode=" + errorcode);
         }
 
         private void addCallerIdAndPassword(GenericRequest.Args args) {

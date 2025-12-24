@@ -1,6 +1,6 @@
 package in.aimlabs.gaming.gconnect.parimatch.dto;
 
-import in.aimlabs.gaming.dto.Wallet;
+import aimlabs.gaming.rgs.gameoperators.Wallet;
 import lombok.Data;
 
 @Data

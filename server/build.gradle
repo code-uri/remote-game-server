@@ -46,6 +46,7 @@ dependencies {
     implementation  project(':game-providers:mplaygames')
 
     implementation  project(':operators:bf-games')
+    implementation  project(':operators:parimatch')
     
 
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'

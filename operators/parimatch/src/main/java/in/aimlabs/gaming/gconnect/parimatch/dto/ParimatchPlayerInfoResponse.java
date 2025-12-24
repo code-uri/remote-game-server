@@ -1,8 +1,8 @@
 package in.aimlabs.gaming.gconnect.parimatch.dto;
 
+import aimlabs.gaming.rgs.gameoperators.Wallet;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import in.aimlabs.gaming.dto.Wallet;
 import lombok.Data;
 
 @Data

@@ -20,3 +20,6 @@ include 'game-providers:qubitgames'
 
 include 'operators'
 include 'operators:bf-games'
+include 'operators:parimatch'
+include 'operators:reevo'
+include 'operators:spinoro'

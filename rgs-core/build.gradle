@@ -19,8 +19,7 @@ dependencyManagement {
 
 dependencies {
     // Core Spring dependencies
-    api 'org.springframework:spring-context'
-    api 'org.springframework:spring-web'
+    api 'org.springframework.boot:spring-boot-starter-web'
     api 'org.springframework.boot:spring-boot-starter-data-mongodb'
 
     api "org.javamoney:moneta:1.4.5"
