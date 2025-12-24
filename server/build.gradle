@@ -47,7 +47,9 @@ dependencies {
 
     implementation  project(':operators:bf-games')
     implementation  project(':operators:parimatch')
-    
+    implementation  project(':operators:reevo')
+    implementation  project(':operators:spinoro')
+    implementation  project(':operators:marvel')
 
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
     implementation('io.jsonwebtoken:jjwt-jackson:0.13.0')
