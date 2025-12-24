@@ -274,7 +274,7 @@ public class SpinOroPlayerServiceAdaptor
                         request.getOrgTxnAmount() != null ? request.getOrgTxnAmount() : 0D,
                         0D,
                         TransactionType.ROLLBACK, request.getGameRoundId(),
-                        true, request.getCurrency()));
+                        false, request.getCurrency()));
             } else if (type == TransactionType.CLOSED || type == TransactionType.CREDIT) {
                 Double debit = request.getDebit() != null ? request.getDebit() : 0D;
                 Double credit = request.getCredit() != null ? request.getCredit() : 0D;
@@ -351,7 +351,7 @@ public class SpinOroPlayerServiceAdaptor
                     request.getCredit() != null ? request.getCredit() : 0D,
                     TransactionType.ROLLBACK,
                     request.getGameRoundId(),
-                    true, request.getCurrency());
+                    false, request.getCurrency());
 
             if (!r.response.success) {
                 throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR);
@@ -399,6 +399,8 @@ public class SpinOroPlayerServiceAdaptor
                 requestPath = "/debitAndCredit";
             } else if (type == TransactionType.ROLLBACK) {
                 requestPath = "/rollbackDebit";
+                amount = Double.valueOf(debit * 100).longValue();
+                roundClosed = false;
             } else {
                 throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "unsupported transaction " + type);
             }
@@ -426,18 +428,37 @@ public class SpinOroPlayerServiceAdaptor
             long startMillis = System.currentTimeMillis();
 
             boolean shouldRetry = type == TransactionType.DEBIT;
-            TransactionResponse res = executeWithRetry(
-                    "txn " + requestPath,
-                    shouldRetry,
-                    () -> postForObject(requestPath, transactionRequest, TransactionResponse.class));
+            TransactionResponse res;
+            try {
+                res = executeWithRetry(
+                        "txn " + requestPath,
+                        shouldRetry,
+                        () -> postForObject(requestPath, transactionRequest, TransactionResponse.class));
+            } catch (BaseRuntimeException bre) {
+                if (type == TransactionType.DEBIT && isUncertainDebitFailure(bre)) {
+                    throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND,
+                            "Debit outcome uncertain. Triggering rollbackDebit.",
+                            bre);
+                }
+                throw bre;
+            }
 
             log.info("{}. Elapsed Time: {}ms", res, System.currentTimeMillis() - startMillis);
 
             if (type == TransactionType.DEBIT && !res.success) {
-                throw new BaseRuntimeException(SystemErrorCode.ROLLBACK_GAME_ROUND);
+                throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, "Debit failed");
             }
             return new TxnResult(res, txnId);
         }
+
+        private static boolean isUncertainDebitFailure(BaseRuntimeException bre) {
+            if (bre == null || bre.getErrorCode() == null) {
+                return false;
+            }
+            return bre.getErrorCode() == SystemErrorCode.COM_ERROR
+                    || bre.getErrorCode() == SystemErrorCode.EMPTY_RESPONSE;
+        }
+
     }
 
     public static record InitGameRequest(String secret, String sessionId, String securityToken, String playerId,
