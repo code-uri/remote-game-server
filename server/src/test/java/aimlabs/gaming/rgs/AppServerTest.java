@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.time.Duration;
 import java.util.List;
 
 
@@ -30,6 +31,13 @@ public class AppServerTest extends AbstractGamesTest {
 
         @Test
         void contextLoads() {
+
+                try {
+                        Thread.sleep(Duration.ofMinutes(1));
+                } catch (InterruptedException e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                }
 
         }
 

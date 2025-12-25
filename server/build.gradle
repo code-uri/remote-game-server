@@ -50,6 +50,8 @@ dependencies {
     implementation  project(':operators:reevo')
     implementation  project(':operators:spinoro')
     implementation  project(':operators:marvel')
+    implementation  project(':operators:slotegrator')
+    implementation  project(':operators:softswiss')
 
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
     implementation('io.jsonwebtoken:jjwt-jackson:0.13.0')
@@ -98,4 +100,15 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
     jvmArgs += ['-Xshare:off']
+}
+
+tasks.register('runLocalTestServer', JavaExec) {
+    group = 'application'
+    description = 'Runs RemoteGameServerLocalServer using the test runtime classpath (includes src/test/resources).'
+    dependsOn tasks.named('testClasses')
+
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'aimlabs.gaming.rgs.RemoteGameServerLocalServer'
+
+    // Forward any args: ./gradlew :server:runLocalTestServer --args="--spring.profiles.active=..."
 }

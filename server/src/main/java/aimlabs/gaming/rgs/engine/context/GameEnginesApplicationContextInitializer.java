@@ -1,21 +1,5 @@
 package aimlabs.gaming.rgs.engine.context;
 
-import aimlabs.gaming.rgs.engine.artifact.ArtifactMetaData;
-import aimlabs.gaming.rgs.engine.artifact.ArtifactMetaDataService;
-import aimlabs.gaming.rgs.engine.discovery.GameEnginesLoadedEvent;
-import aimlabs.gaming.rgs.engine.discovery.LoadGameEngineEvent;
-import aimlabs.gaming.rgs.engine.discovery.RGSEngineProperties;
-import aimlabs.gaming.rgs.engine.discovery.RGSServiceDiscovery;
-import jakarta.annotation.PostConstruct;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.ApplicationListener;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,24 +7,53 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationListener;
+import org.springframework.stereotype.Component;
+
+import aimlabs.gaming.rgs.engine.artifact.ArtifactMetaData;
+import aimlabs.gaming.rgs.engine.artifact.ArtifactMetaDataService;
+import aimlabs.gaming.rgs.engine.discovery.GameEnginesLoadedEvent;
+import aimlabs.gaming.rgs.engine.discovery.LoadGameEngineEvent;
+import aimlabs.gaming.rgs.engine.discovery.RGSEngineProperties;
+import aimlabs.gaming.rgs.engine.discovery.RGSServiceDiscovery;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+
 @Data
 @Component
 @Slf4j
-public class GameEnginesApplicationContextInitializer implements ApplicationListener<LoadGameEngineEvent> {
+public class GameEnginesApplicationContextInitializer implements ApplicationListener<LoadGameEngineEvent>, CommandLineRunner {
 
-    @Autowired
+    
     RGSEngineProperties rgsEngineProperties;
-    @Autowired
+    
     ArtifactMetaDataService artifactMetaDataService;
-    @Value("${rgs.engines.dir:/workspace/engines}")
+
     private String enginesDir;
-    @Autowired
+    
     private ApplicationContext applicationContext;
-    @Autowired
+    
     private RGSServiceDiscovery rgsServiceDiscovery;
-    @Autowired
+    
     private ApplicationEventPublisher applicationEventPublisher;
 
+
+    GameEnginesApplicationContextInitializer(RGSEngineProperties rgsEngineProperties,
+            ArtifactMetaDataService artifactMetaDataService, ApplicationContext applicationContext,
+            RGSServiceDiscovery rgsServiceDiscovery,
+            ApplicationEventPublisher applicationEventPublisher, @Value("${rgs.engines.dir:/workspace/engines}") String enginesDir) {
+        this.rgsEngineProperties = rgsEngineProperties;
+        this.artifactMetaDataService = artifactMetaDataService;
+        this.applicationContext = applicationContext;
+        this.rgsServiceDiscovery = rgsServiceDiscovery;
+        this.applicationEventPublisher = applicationEventPublisher;
+        this.enginesDir = enginesDir;
+    }   
     public void load(boolean register) throws IOException {
         rgsServiceDiscovery.gameEngineVerificationReports.clear();
         Path dir = Path.of(rgsEngineProperties.getDir());
@@ -99,8 +112,10 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
         }
     }
 
-    @PostConstruct
-    public void run() throws Exception {
+
+
+    @Override
+    public void run(String... args) throws Exception {
         String refId = UUID.randomUUID().toString();
         try {
             load(true);
