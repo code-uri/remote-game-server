@@ -1,8 +1,21 @@
 package aimlabs.gaming.rgs.settings;
 
-import aimlabs.gaming.rgs.core.AbstractEntityService;
-import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
-import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.connection.Message;
+import org.springframework.data.redis.connection.MessageListener;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.PatternTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,22 +23,11 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
+import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.event.EventListener;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.listener.PatternTopic;
-import org.springframework.data.redis.listener.RedisMessageListenerContainer;
-import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
-import java.util.Iterator;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 @Slf4j
 @Data
@@ -48,6 +50,9 @@ public class GameSettingsService
 
     @Autowired
     SettingsTemplateStore settingsTemplateStore;
+
+    @Autowired
+    RedisMessageListenerContainer redisMessageListenerContainer;
 
     /*
      * public Mono<GameSettings> findOne(String uid) {
@@ -396,12 +401,17 @@ public class GameSettingsService
 
     @Override
     public void run(String... args) throws Exception {
-
-        MessageListenerAdapter listenerAdapter = new MessageListenerAdapter(this, "receiveMessage");
-
-        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
-        container.setConnectionFactory(redisTemplate.getConnectionFactory());
-        container.addMessageListener(listenerAdapter, new PatternTopic("refresh-game-settings"));
+                          // Listen for cache refresh messages
+        MessageListener refreshListener = (Message message, byte[] pattern) -> {
+            try {
+                   String refresh = new String(message.getBody());
+                        handleEvent(refresh);
+            } catch (Exception e) {
+                log.error("Error processing refresh message", e);
+            }
+        };
+    
+        redisMessageListenerContainer.addMessageListener(refreshListener, new PatternTopic("refresh-game-settings"));
 
         // if (disposable == null) {
         // disposable = redisTemplate.watch(); listenToChannel("refresh-game-settings")

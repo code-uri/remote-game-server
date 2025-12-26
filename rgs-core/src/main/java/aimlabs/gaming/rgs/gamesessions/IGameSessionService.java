@@ -24,9 +24,9 @@ public interface IGameSessionService extends IEntityService<GameSession> {
 
     GameSession findOneByTokenAndStatus(String token, Status status);
 
-    Boolean keepSessionAlive(GameSession session);
+    Boolean keepSessionAlive(String session);
 
-    Boolean setExpiration(GameSession session);
+    Boolean setExpiration(String uid, long expirationInSeconds);
 
     GameSession expireSession(GameSession gameSession);
 

@@ -16,7 +16,7 @@ public class GameSessionAuthenticationManager implements AuthenticationManager {
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
         if(authentication.getPrincipal() instanceof GameSession) {
             GameSession session = (GameSession) authentication.getPrincipal();
-            gameSessionService.keepSessionAlive(session);
+            gameSessionService.keepSessionAlive(session.getUid());
         }
         return authentication;
     }

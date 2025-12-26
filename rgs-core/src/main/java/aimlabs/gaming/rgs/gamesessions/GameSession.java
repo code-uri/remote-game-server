@@ -37,8 +37,8 @@ public class GameSession extends BaseDto {
     private Map<String,String> urls = new HashMap<>();
 
     private String jurisdiction;
-    private long realityCheckIntervalInMilliSeconds;
-    private long elapsedTimeInMilliSeconds;
+    private long realityCheckIntervalInSeconds;
+    private long elapsedTimeInSeconds;
 
     private Double minBet;
     private Double maxTotalBet;
@@ -96,8 +96,8 @@ public class GameSession extends BaseDto {
         newSession.setDeleted(this.isDeleted());
 
         newSession.setJurisdiction(this.getJurisdiction());
-        newSession.setRealityCheckIntervalInMilliSeconds(this.getRealityCheckIntervalInMilliSeconds());
-        newSession.setElapsedTimeInMilliSeconds(this.getElapsedTimeInMilliSeconds());
+        newSession.setRealityCheckIntervalInSeconds(this.getRealityCheckIntervalInSeconds());
+        newSession.setElapsedTimeInSeconds(this.getElapsedTimeInSeconds());
         newSession.setMinBet(this.getMinBet());
         newSession.setDefaultBet(this.getDefaultBet());
         newSession.setMaxTotalBet(this.getMaxTotalBet());

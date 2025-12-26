@@ -42,8 +42,8 @@ public class GameSessionDocument extends EntityDocument {
     private boolean aggregateCredits;
     private Map<String,String> urls = new HashMap<>();
     private String jurisdiction;
-    private long realityCheckIntervalInMilliSeconds;
-    private long elapsedTimeInMilliSeconds;
+    private long realityCheckIntervalInSeconds;
+    private long elapsedTimeInSeconds;
     private Double minBet;
     private Double maxTotalBet;
     private Double defaultBet;

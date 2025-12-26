@@ -7,7 +7,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.ApplicationContext;
@@ -79,15 +78,13 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
                     });
         } else {
             directoryStream.map(path -> new ArtifactMetaData(path.toFile().getName(), ArtifactMetaData.Type.ENGINE))
-                    .peek(artifactMetaData -> {
+                    .forEach(artifactMetaData -> {
                         GameEngineApplicationContext engineApplicationContext = new GameEngineApplicationContext(
                                 artifactMetaData, applicationContext, rgsServiceDiscovery);
                         if (register)
                             engineApplicationContext.start();
 
                         log.info("Engine {} initialisation completed", artifactMetaData.getName());
-                    }).forEach(artifactMetaData -> {
-                        log.debug("Loaded engine: {}", artifactMetaData.getName());
                     });
 
             if (rgsServiceDiscovery.getGameEngineServices().isEmpty()) {
@@ -103,7 +100,7 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
             load(event.isRegister());
             applicationEventPublisher
                     .publishEvent(new GameEnginesLoadedEvent(event.getSource(), event.getRefId(), "SUCCESS"));
-            log.info("Game engines registered. reference id  {}", event.getRefId());
+            log.info("Game engines registered. {}", event.getClass().getName());
         } catch (Exception e) {
             log.error("", e);
             rgsServiceDiscovery.getGameEngineServices().clear();
@@ -121,7 +118,7 @@ public class GameEnginesApplicationContextInitializer implements ApplicationList
             load(true);
             GameEnginesLoadedEvent event = new GameEnginesLoadedEvent("ON_STARTUP", refId, "SUCCESS");
             applicationEventPublisher.publishEvent(event);
-            log.info("Game engines registered. reference id  {}", refId);
+            //log.info("Game engines registered. {}", event.getClass().getName());
         } catch (Exception e) {
             log.error("Engine discovery failed.", e);
             GameEnginesLoadedEvent event = new GameEnginesLoadedEvent("ON_STARTUP", refId, "FAILED");

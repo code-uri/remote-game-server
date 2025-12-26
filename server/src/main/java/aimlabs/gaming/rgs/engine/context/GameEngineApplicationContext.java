@@ -1,5 +1,31 @@
 package aimlabs.gaming.rgs.engine.context;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
+import java.util.stream.Collectors;
+
+import org.aspectj.lang.annotation.Pointcut;
+import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
+import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.DependencyDescriptor;
+import org.springframework.beans.factory.support.AbstractBeanDefinition;
+import org.springframework.beans.factory.support.AutowireCandidateResolver;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.util.StringUtils;
+
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.engine.artifact.ArtifactMetaData;
@@ -15,26 +41,6 @@ import in.aimlabs.gaming.engine.api.service.GameEngine;
 import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.aspectj.lang.annotation.Pointcut;
-import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
-import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor;
-import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.beans.factory.config.DependencyDescriptor;
-import org.springframework.beans.factory.support.AbstractBeanDefinition;
-import org.springframework.beans.factory.support.AutowireCandidateResolver;
-import org.springframework.beans.factory.support.BeanDefinitionBuilder;
-import org.springframework.beans.factory.support.DefaultListableBeanFactory;
-import org.springframework.context.ApplicationContext;
-import org.springframework.core.annotation.AnnotationUtils;
-import org.springframework.util.StringUtils;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Path;
-import java.util.*;
-import java.util.jar.Attributes;
-import java.util.jar.Manifest;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Data
@@ -76,9 +82,9 @@ public class GameEngineApplicationContext {
             if(mainClass!=null && mainClass.contains("table")) {
                 forcedResultsJarPath = Path.of(engineJarPath.toFile()
                         .getAbsolutePath().replace(engineJarPath.toFile().getName(), "game-engine-table-forced-results-" + version + ".jar"));
-                log.info("Forced results jar {}", forcedResultsJarPath.toAbsolutePath());
+                log.debug("Forced results jar {}", forcedResultsJarPath.toAbsolutePath());
                 if (forcedResultsJarPath.toFile().exists()) {
-                    log.info("Including forced results jar {}", forcedResultsJarPath);
+                    log.debug("Including forced results jar {}", forcedResultsJarPath);
                     jcl.add(forcedResultsJarPath.toFile().getPath());
                     forcedResultsManifest = jcl.getClasspathResources()
                             .getJarManifest(forcedResultsJarPath.toAbsolutePath().toString());
@@ -86,9 +92,9 @@ public class GameEngineApplicationContext {
             }else{
                 forcedResultsJarPath = Path.of(engineJarPath.toFile()
                         .getAbsolutePath().replace(engineJarPath.toFile().getName(), "game-engine-slots-forcedresults-" + version + ".jar"));
-                log.info("Forced results jar {}", forcedResultsJarPath.toAbsolutePath());
+                log.debug("Forced results jar {}", forcedResultsJarPath.toAbsolutePath());
                 if (forcedResultsJarPath.toFile().exists()) {
-                    log.info("Including forced results jar {}", forcedResultsJarPath);
+                    log.debug("Including forced results jar {}", forcedResultsJarPath);
                     jcl.add(forcedResultsJarPath.toFile().getPath());
                     forcedResultsManifest = jcl.getClasspathResources()
                             .getJarManifest(forcedResultsJarPath.toAbsolutePath().toString());
@@ -104,7 +110,7 @@ public class GameEngineApplicationContext {
             
             public Object getLazyResolutionProxyIfNecessary(DependencyDescriptor descriptor, String beanName) {
                 if (descriptor.getDependencyType().getPackageName().startsWith("in.aimlabs.gaming.engine")) {
-                    //log.info("dependency name: {}", descriptor.getDependencyName());
+                    //log.debug("dependency name: {}", descriptor.getDependencyName());
                     if (descriptor.getDependencyName() != null && beanFactory.containsBean(descriptor.getDependencyName())) {
                         return beanFactory.getBean(descriptor.getDependencyName());
                     }
@@ -221,7 +227,7 @@ public class GameEngineApplicationContext {
                             .map(method -> AnnotationUtils.findAnnotation(method, Pointcut.class))
                             .filter(Objects::nonNull)
                             .forEach(pointcut -> {
-                                log.info("Found aspect {}", aspect);
+                                log.debug("Found aspect {}", aspect);
                                 aspectsMap.put(pointcut, aspect);
                             });
                 }
@@ -243,7 +249,7 @@ public class GameEngineApplicationContext {
         List<Object> aspects = aspectsMap.keySet()
                 .stream()
                 .filter(pointcut -> {
-                    log.info("Evaluating pointcut {} for dependency class {}", pointcut, targetObject.getClass().getName());
+                    log.debug("Evaluating pointcut {} for dependency class {}", pointcut, targetObject.getClass().getName());
                     boolean matched =  pointcut.value().contains(targetObject.getClass().getName())
                                        || (pointcut.value().contains("execution(public * in.aimlabs.gaming.engine.*.service.*.play(..))")
                                            && targetObject instanceof GameEngine)
@@ -253,7 +259,7 @@ public class GameEngineApplicationContext {
                     /*AspectJExpressionPointcut pointcutExpression = new AspectJExpressionPointcut();
                     pointcutExpression.setExpression(pointcut.value());*/
                     if (matched)
-                        log.info("Pointcut {} matched for dependency class. {}", pointcut, targetObject.getClass().getName());
+                        log.debug("Pointcut {} matched for dependency class. {}", pointcut, targetObject.getClass().getName());
 
                     return matched;
                 })
@@ -281,7 +287,7 @@ public class GameEngineApplicationContext {
             AspectJProxyFactory proxyFactory = new AspectJProxyFactory(targetObject);
             //proxyFactory.addAspect(SecurityManager.class);
             proxyFactory.addAspect(aspectObject);
-            log.info("Aspect {} created.", aspectObject.getClass().getName());
+            log.debug("Aspect {} created.", aspectObject.getClass().getName());
             if (aspectObject instanceof ForceGameResult forceGameResult) {
                 forceGameResult.setGameEngineService((GameEngine) targetObject);
                 this.applicationContext.getAutowireCapableBeanFactory()

@@ -1,21 +1,16 @@
 package aimlabs.gaming.rgs.cache.aspect;
 
 
-import aimlabs.gaming.rgs.core.entity.BaseDto;
-import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
-import aimlabs.gaming.rgs.tenant.TenantContextHolder;
-import aimlabs.gaming.rgs.core.MongoEntityStore;
-import aimlabs.gaming.rgs.cache.EntityCacheManager;
-import aimlabs.gaming.rgs.cache.EntityCacheManager.CacheKey;
-import aimlabs.gaming.rgs.core.AbstractEntityService;
-import lombok.extern.slf4j.Slf4j;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.ApplicationContext;
@@ -23,37 +18,42 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import aimlabs.gaming.rgs.cache.EntityCacheManager;
+import aimlabs.gaming.rgs.cache.EntityCacheManager.CacheKey;
+import aimlabs.gaming.rgs.core.AbstractEntityService;
+import aimlabs.gaming.rgs.core.MongoEntityStore;
+import aimlabs.gaming.rgs.core.entity.BaseDto;
+import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Aspect
 @Slf4j
 public class CacheEntitiesImplAspect implements ApplicationContextAware, CommandLineRunner {
 
-    @Autowired(required = false)
     RedisTemplate<String, Object> redisTemplate;
-
-    @Autowired(required = false)
-    StringRedisTemplate stringRedisTemplate;
-
-    @Autowired(required = false)
     RedisMessageListenerContainer redisMessageListenerContainer;
-
-    @Autowired
     EntityCacheManager entityCacheManager;
+    String currentDatabase;
+
+    CacheEntitiesImplAspect(RedisTemplate<String, Object> redisTemplate,
+            RedisMessageListenerContainer redisMessageListenerContainer,
+            EntityCacheManager entityCacheManager,
+         @Value("${spring.data.mongodb.database:rgsdb}") String currentDatabase) {
+        this.redisTemplate = redisTemplate;
+        this.redisMessageListenerContainer = redisMessageListenerContainer;
+        this.entityCacheManager = entityCacheManager;
+        this.currentDatabase = currentDatabase;
+    }
 
     public static final String INVALIDATE_CACHED_ENTITY = "invalidate-cached-entity";
 
     Set<String> watchedNameSpaces = new HashSet<>();
-    
-    @Value("${spring.data.mongodb.database:rgsdb}")
-    private String currentDataBase;
 
     private ApplicationContext applicationContext;
 
@@ -124,7 +124,7 @@ public class CacheEntitiesImplAspect implements ApplicationContextAware, Command
             org.springframework.data.mongodb.core.mapping.Document document = store.getDocumentClass()
                     .getAnnotation(org.springframework.data.mongodb.core.mapping.Document.class);
 
-            String namespace = currentDataBase + "." + document.collection();
+            String namespace = currentDatabase + "." + document.collection();
             watchedNameSpaces.add(namespace);
 
             String tenant = TenantContextHolder.getTenant();

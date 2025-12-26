@@ -1,5 +1,6 @@
 package aimlabs.gaming.rgs.filters;
 
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import aimlabs.gaming.rgs.utils.TenantUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -29,22 +30,17 @@ public class TenantContextFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
         String tenant = tenantUtils.getTenant(request);
-        String clientId = request.getHeader("X-Client-Id");
-        if (clientId == null) {
-            clientId = "default";
-        }
-        String clientSecret = request.getHeader("X-Client-Key");
-        if (clientSecret == null) {
-            clientSecret = "default";
-        }
-
         log.info("Tenant found: {}", tenant);
 
-        // Store tenant context in request attributes for downstream use
-        request.setAttribute("TENANT", tenant);
-        request.setAttribute("CLIENT_ID", clientId);
-        request.setAttribute("CLIENT_SECRET", clientSecret);
+        ScopedValue.where(TenantContextHolder.getScopedValue(), tenant)
+                .run(() -> {
+                    try {
+                        filterChain.doFilter(request, response);
+                    } catch (IOException | ServletException e) {
+                        // Re-throw or handle specifically so Spring's GlobalExceptionHandler can see it
+                        throw new RuntimeException(e);
+                    }
+                });
 
-        filterChain.doFilter(request, response);
     }
 }

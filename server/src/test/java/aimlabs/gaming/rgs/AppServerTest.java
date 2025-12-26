@@ -32,13 +32,6 @@ public class AppServerTest extends AbstractGamesTest {
         @Test
         void contextLoads() {
 
-                try {
-                        Thread.sleep(Duration.ofMinutes(1));
-                } catch (InterruptedException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                }
-
         }
 
 }

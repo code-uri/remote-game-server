@@ -1,10 +1,5 @@
 package aimlabs.gaming.rgs.gamesessions;
 
-import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
-import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import aimlabs.gaming.rgs.games.GameSessionAuthenticationToken;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.MethodParameter;
 import org.springframework.lang.Nullable;
@@ -16,7 +11,10 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
-import java.security.Principal;
+import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
+import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
+import aimlabs.gaming.rgs.games.GameSessionAuthenticationToken;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
@@ -52,7 +50,9 @@ public class GameSessionArgumentResolver implements HandlerMethodArgumentResolve
             throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
         }
 
-        gameSessionService.keepSessionAlive(gameSession);
+        if(!gameSessionService.keepSessionAlive(gameSession.getUid()))
+            throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+
         return gameSession;
     }
 }

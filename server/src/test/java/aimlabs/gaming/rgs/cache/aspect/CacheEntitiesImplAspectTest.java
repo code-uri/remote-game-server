@@ -1,10 +1,16 @@
 package aimlabs.gaming.rgs.cache.aspect;
 
-import aimlabs.gaming.rgs.cache.EntityCacheManager;
-import aimlabs.gaming.rgs.core.AbstractEntityService;
-import aimlabs.gaming.rgs.core.MongoEntityStore;
-import aimlabs.gaming.rgs.core.entity.BaseDto;
-import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.Signature;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,10 +29,11 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import aimlabs.gaming.rgs.cache.EntityCacheManager;
+import aimlabs.gaming.rgs.core.AbstractEntityService;
+import aimlabs.gaming.rgs.core.MongoEntityStore;
+import aimlabs.gaming.rgs.core.entity.BaseDto;
+import aimlabs.gaming.rgs.core.event.EntityUpdateEvent;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CacheEntitiesImplAspect Tests")
@@ -64,14 +71,11 @@ class CacheEntitiesImplAspectTest {
 
     @BeforeEach
     void setUp() {
-        aspect = new CacheEntitiesImplAspect();
+        
         entityCacheManager = new EntityCacheManager();
+        aspect = new CacheEntitiesImplAspect(redisTemplate, listenerContainer, entityCacheManager, "testdb");
         aspect.setApplicationContext(applicationContext);
-        ReflectionTestUtils.setField(aspect, "currentDataBase", "testdb");
-        ReflectionTestUtils.setField(aspect, "redisTemplate", redisTemplate);
-        ReflectionTestUtils.setField(aspect, "redisMessageListenerContainer", listenerContainer);
-        ReflectionTestUtils.setField(aspect, "entityCacheManager", entityCacheManager);
-
+    
         testDto = new TestDto("test-id-123", "Test Entity");
     }
 

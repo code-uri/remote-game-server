@@ -97,17 +97,17 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         if (brand.getJurisdiction() != null && newSession.getJurisdiction() == null)
             newSession.setJurisdiction(brand.getJurisdiction());
 
-        if (newSession.getJurisdiction() != null) {
-            newSession.setRealityCheckIntervalInMilliSeconds(gameSession.getRealityCheckIntervalInMilliSeconds());
-            if (brand.getRealityCheckIntervalInMilliSeconds() > 0
-                    && newSession.getRealityCheckIntervalInMilliSeconds() == 0)
-                newSession.setRealityCheckIntervalInMilliSeconds(brand.getRealityCheckIntervalInMilliSeconds());
+         if(newSession.getJurisdiction()!=null)
+        {
+            newSession.setRealityCheckIntervalInSeconds(gameSession.getRealityCheckIntervalInSeconds());
+            if (brand.getRealityCheckIntervalInMilliSeconds() > 0 && newSession.getRealityCheckIntervalInSeconds() == 0)
+                newSession.setRealityCheckIntervalInSeconds(Duration.ofMillis(brand.getRealityCheckIntervalInMilliSeconds()).toSeconds());
 
-            newSession.setElapsedTimeInMilliSeconds(gameSession.getElapsedTimeInMilliSeconds());
+            newSession.setElapsedTimeInSeconds(gameSession.getElapsedTimeInSeconds());
         }
 
         getMapper().asDto(getStore().create(getMapper().asEntity(newSession)));
-        setExpiration(newSession);
+        setExpiration(newSession.getUid(), newSession.getCreatedOn().getTime());
         return newSession;
     }
 
@@ -133,16 +133,16 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         return getMapper().asDto(store.findOneByTokenAndStatus(token, status));
     }
 
-    public Boolean keepSessionAlive(GameSession session) {
-        if (session == null) {
+    public Boolean keepSessionAlive(String uid) {
+        if (uid == null) {
             return null;
         }
 
         RedisTemplate<String, Object> redisTemplate = getRedisTemplate();
-        String sessionKey = getSessionKey(session.getUid()); // Key = "session-123", Value = startTime
+        String sessionKey = getSessionKey(uid); // Key = "session-123", Value = startTime
 
         Object startTimeObj = redisTemplate.opsForValue().get(sessionKey);
-        long elapsedTime = startTimeObj instanceof Long ? (Long) startTimeObj : 0L;
+        long elapsedTimeInMilliSeconds = startTimeObj instanceof Long ? (Long) startTimeObj : 0L;
 
         Duration ttl = Duration.ofSeconds(redisTemplate.getExpire(sessionKey));
 
@@ -150,13 +150,12 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
             throw new BaseRuntimeException(SystemErrorCode.TOKEN_EXPIRED);
 
         long currentTime = Instant.now().toEpochMilli();
-        elapsedTime = currentTime - elapsedTime; // Time since session creation
+        elapsedTimeInMilliSeconds = currentTime - elapsedTimeInMilliSeconds; // Time since session creation
 
         log.info("Keeping session {} alive | Elapsed Time: {} seconds | TTL: {}",
-                session.getUid(), Duration.ofMillis(elapsedTime).toSeconds(), ttl.toSeconds());
+                uid, Duration.ofMillis(elapsedTimeInMilliSeconds).toSeconds(), ttl.toSeconds());
 
-        session.setElapsedTimeInMilliSeconds(elapsedTime);
-        return setExpiration(session);
+        return setExpiration(uid, elapsedTimeInMilliSeconds);
 
     }
 
@@ -165,24 +164,11 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
     }
 
     @Override
-    public Boolean setExpiration(GameSession session) {
-        String sessionKey = getSessionKey(session.getUid()); // Key = "session-123", Value = startTim
-        long currentTimeInMilliseconds = Instant.now().toEpochMilli();
-        // long elapsed = currentTimeInMilliseconds -
-        // session.getElapsedTimeInMilliSeconds();
-        // log.info("currentTime {} elapsed time {} ", currentTimeInMilliseconds,
-        // elapsed);
-        if (session.getElapsedTimeInMilliSeconds() == 0
-        // TODO fix this to reset elapsed time on every nth interval || elapsed >
-        // session.getRealityCheckIntervalInMilliSeconds()
-        ) {
-            // log.info("reset the elapsed time {} to {}. showing reality check popup",
-            // Duration.ofMillis(elapsed).toSeconds(), currentTimeInMilliseconds);
-            session.setElapsedTimeInMilliSeconds(currentTimeInMilliseconds);
-        }
+    public Boolean setExpiration(String  uid, long expirationInSeconds) {
+        String sessionKey = getSessionKey(uid); // Key = "session-123", Value = startTim
 
         getRedisTemplate()
-                .opsForValue().setGet(sessionKey, session.getElapsedTimeInMilliSeconds(),
+                .opsForValue().setGet(sessionKey, expirationInSeconds,
                         Duration.ofSeconds(getGameSessionExpirationSecs()));
         return true;
     }
@@ -231,12 +217,11 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
             newSession.setJurisdiction(brand.getJurisdiction());
 
         if (newSession.getJurisdiction() != null) {
-            newSession.setRealityCheckIntervalInMilliSeconds(glr.getRealityCheckIntervalInMilliSeconds());
-            if (brand.getRealityCheckIntervalInMilliSeconds() > 0
-                    && newSession.getRealityCheckIntervalInMilliSeconds() == 0)
-                newSession.setRealityCheckIntervalInMilliSeconds(brand.getRealityCheckIntervalInMilliSeconds());
+             newSession.setRealityCheckIntervalInSeconds(Duration.ofMillis(glr.getRealityCheckIntervalInMilliSeconds()).toSeconds());
+            if (brand.getRealityCheckIntervalInMilliSeconds() > 0 && newSession.getRealityCheckIntervalInSeconds() == 0)
+                newSession.setRealityCheckIntervalInSeconds(Duration.ofMillis(brand.getRealityCheckIntervalInMilliSeconds()).toSeconds());
 
-            newSession.setElapsedTimeInMilliSeconds(Instant.now().toEpochMilli() + glr.getElapsedTimeInMilliSeconds());
+            newSession.setElapsedTimeInSeconds(Duration.ofMillis(glr.getElapsedTimeInMilliSeconds()).toSeconds());
         }
 
         if (glr.getLobbyUrl() != null)
@@ -295,8 +280,8 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         newSession.setAggregateCredits(gameSession.isAggregateCredits());
 
         newSession.setJurisdiction(gameSession.getJurisdiction());
-        newSession.setRealityCheckIntervalInMilliSeconds(gameSession.getRealityCheckIntervalInMilliSeconds());
-        newSession.setElapsedTimeInMilliSeconds(gameSession.getElapsedTimeInMilliSeconds());
+        newSession.setRealityCheckIntervalInSeconds(gameSession.getRealityCheckIntervalInSeconds());
+        newSession.setElapsedTimeInSeconds(gameSession.getElapsedTimeInSeconds());
 
         String jwt = jwtUtil.generateJws(new HashMap<>(),
                 Map.of("brand", newSession.getBrand(),

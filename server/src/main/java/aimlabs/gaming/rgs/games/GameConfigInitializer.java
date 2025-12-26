@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -51,8 +52,8 @@ public class GameConfigInitializer implements GameInitializer {
         if(gameSession.getJurisdiction() != null) {
             ObjectNode regulations = objectMapper.createObjectNode();
             regulations.put("jurisdiction", gameSession.getJurisdiction());
-            regulations.put("realityCheckInterval", gameSession.getRealityCheckIntervalInMilliSeconds());
-            regulations.put("elapsedTime", Instant.now().toEpochMilli() - gameSession.getElapsedTimeInMilliSeconds());
+            regulations.put("realityCheckIntervalInSeconds", gameSession.getRealityCheckIntervalInSeconds());
+            regulations.put("elapsedTimeInSeconds", Duration.ofMillis(Instant.now().toEpochMilli() - gameSession.getElapsedTimeInSeconds()).toSeconds());
             config.set("regulations", regulations);
         }
 
