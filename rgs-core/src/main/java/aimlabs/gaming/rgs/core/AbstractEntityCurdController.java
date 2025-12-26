@@ -1,7 +1,13 @@
 package aimlabs.gaming.rgs.core;
 
-
 import aimlabs.gaming.rgs.core.entity.BaseDto;
+import aimlabs.gaming.rgs.core.dto.SearchRequest;
+import aimlabs.gaming.rgs.core.dto.SearchResponse;
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 import java.util.Map;
@@ -9,52 +15,67 @@ import java.util.Map;
 public abstract class AbstractEntityCurdController<T extends BaseDto>
         extends EntityController<T> {
 
-//    public Mono<T> createEntity(@RequestBody T dto) {
-//        return ReactiveSecurityContextHolder.getContext().flatMap(securityContext -> {
-//            UserDetails userDetails = (UserDetails) securityContext.getAuthentication().getPrincipal();
-//            if (!userDetails.getTenant().toLowerCase().equals("system"))
-//                dto.setTenant(userDetails.getTenant());
-//            else if (dto.getTenant() == null)
-//                dto.setTenant(userDetails.getTenant());
-//
-//            return super.createEntity(dto);
-//        });
-//    }
-//
-//
-//    public Mono<T> updateEntity( @RequestBody T dto, @PathVariable("uid") String uid) {
-//        return ReactiveSecurityContextHolder.getContext().flatMap(securityContext -> {
-//            UserDetails userDetails = (UserDetails) securityContext.getAuthentication().getPrincipal();
-//            if (!userDetails.getTenant().toLowerCase().equals("system"))
-//                dto.setTenant(userDetails.getTenant());
-//            else if (dto.getTenant() == null)
-//                dto.setTenant(userDetails.getTenant());
-//
-//            return super.updateEntity(dto, uid);
-//        });
-//    }
-//
-//
-//    public Mono<T> updatePartial(@PathVariable("id") String uid, @RequestBody Map<String, Object> values) {
-//        return ReactiveSecurityContextHolder.getContext().flatMap(securityContext -> {
-//            UserDetails userDetails = (UserDetails) securityContext.getAuthentication().getPrincipal();
-//            if (!userDetails.getTenant().toLowerCase().equals("system"))
-//                values.put("tenant", userDetails.getTenant());
-//            else values.computeIfAbsent("tenant", k -> userDetails.getTenant());
-//
-//            return this.getService().updatePartial(uid, values);
-//        });
-//    }
-//
-//
-//    public Mono<SearchResponse<T>> search(@RequestBody SearchRequest searchRequest) {
-//        return ReactiveSecurityContextHolder.getContext().flatMap(securityContext -> {
-//            UserDetails userDetails = (UserDetails) securityContext.getAuthentication().getPrincipal();
-//            if (!userDetails.getTenant().toLowerCase().equals("system"))
-//                searchRequest.getFilters().put("tenant", List.of(userDetails.getTenant()));
-//            else searchRequest.getFilters().computeIfAbsent("tenant", k -> List.of(userDetails.getTenant()));
-//
-//            return this.getService().search(searchRequest);
-//        });
-//    }
+    @Override
+    @PostMapping
+    public T createEntity(@RequestBody T dto) {
+        applyTenant(dto);
+        return super.createEntity(dto);
+    }
+
+    @Override
+    @PostMapping("{uid}")
+    public T updateEntity(@RequestBody T dto, @PathVariable("uid") String uid) {
+        applyTenant(dto);
+        return super.updateEntity(dto, uid);
+    }
+
+    @Override
+    @PutMapping("{id}")
+    public T updatePartial(@PathVariable("id") String uid, @RequestBody Map<String, Object> values) {
+        applyTenant(values);
+        return super.updatePartial(uid, values);
+    }
+
+    @Override
+    @PostMapping("search")
+    public SearchResponse<T> search(@RequestBody SearchRequest searchRequest) {
+        applyTenant(searchRequest);
+        return super.search(searchRequest);
+    }
+
+    private static boolean isSystemTenant(String tenant) {
+        return tenant != null && tenant.equalsIgnoreCase("system");
+    }
+
+    private static void applyTenant(BaseDto dto) {
+        String currentTenant = TenantContextHolder.getTenant();
+        if (!isSystemTenant(currentTenant)) {
+            dto.setTenant(currentTenant);
+            return;
+        }
+
+        if (dto.getTenant() == null) {
+            dto.setTenant(currentTenant);
+        }
+    }
+
+    private static void applyTenant(Map<String, Object> values) {
+        String currentTenant = TenantContextHolder.getTenant();
+        if (!isSystemTenant(currentTenant)) {
+            values.put("tenant", currentTenant);
+            return;
+        }
+
+        values.computeIfAbsent("tenant", k -> currentTenant);
+    }
+
+    private static void applyTenant(SearchRequest searchRequest) {
+        String currentTenant = TenantContextHolder.getTenant();
+        if (!isSystemTenant(currentTenant)) {
+            searchRequest.getFilters().put("tenant", List.of(currentTenant));
+            return;
+        }
+
+        searchRequest.getFilters().computeIfAbsent("tenant", k -> List.of(currentTenant));
+    }
 }

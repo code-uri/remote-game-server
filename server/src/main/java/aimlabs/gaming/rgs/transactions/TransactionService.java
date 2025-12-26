@@ -209,6 +209,7 @@ public class TransactionService extends AbstractEntityService<Transaction, Trans
         try {
             PlayerTransactionRequest request = new PlayerTransactionRequest();
             request.setTxnId(transaction.getUid());
+            request.setBrand(gameSession.getBrand());
             request.setToken(gameSession.getToken());
             request.setInternalToken(gameSession.getUid());
             request.setRequestType(txnType);

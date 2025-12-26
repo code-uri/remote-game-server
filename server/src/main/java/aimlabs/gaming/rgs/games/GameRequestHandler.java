@@ -176,9 +176,10 @@ public class GameRequestHandler implements IGameLaunchService{
                         "Invalid game session. Please re-launch the game.");
 
             if (gameSession.isDemo()) {
-                gameSessionService.setExpiration(gameSession);
-            } else
-                gameSessionService.keepSessionAlive(gameSession);
+                gameSessionService.setExpiration(gameSession.getUid(), System.currentTimeMillis());
+            } else {
+                gameSessionService.keepSessionAlive(gameSession.getUid());
+            }
 
         } else {
 

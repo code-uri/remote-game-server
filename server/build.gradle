@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.5'
+    id 'com.google.cloud.tools.jib' version '3.5.2'
 }
 
 apply plugin: 'io.spring.dependency-management'
@@ -9,6 +10,27 @@ group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
 apply from: "../engines.gradle"
+
+ext {
+    // Set a default environment if none is provided
+    environment = project.hasProperty('env') ? project.env : 'stage'
+
+    def tag = findProperty('deployment_tag')
+    if (tag != null && tag.toString().length() > 0)
+        deployment_tag = tag
+    else
+        deployment_tag = 'latest'
+
+
+    println("Deployment >>>>>>>>>>  tag: $deployment_tag")
+
+    def org = findProperty('org')
+    if (org != null && org.toString().length() > 0)
+        orgName = "aimlabs-" + org
+    else
+        orgName = "aimlabs"
+}
+
 
 java {
     toolchain {
@@ -102,6 +124,7 @@ tasks.named('test') {
     jvmArgs += ['-Xshare:off']
 }
 
+
 tasks.register('runLocalTestServer', JavaExec) {
     group = 'application'
     description = 'Runs RemoteGameServerLocalServer using the test runtime classpath (includes src/test/resources).'
@@ -112,3 +135,59 @@ tasks.register('runLocalTestServer', JavaExec) {
 
     // Forward any args: ./gradlew :server:runLocalTestServer --args="--spring.profiles.active=..."
 }
+
+
+
+jib {
+    from {
+        // Any image that doesn't support arm64
+        image = "amazoncorretto:25-headless"
+        platforms {
+            platform {
+                architecture = "amd64"
+                os = "linux"
+            }
+            platform {
+                architecture = "arm64"
+                os = "linux"
+            }
+        }
+    }
+    // to {
+    //     image = "ghcr.io/${orgName}/rgs:$deployment_tag"
+    //     auth {
+    //         username = System.getenv("GPR_USER")
+    //         password = System.getenv("GPR_KEY")
+    //     }
+    //     //  tags = ["latest"]
+    // }
+    // container {
+    //     mainClass = "in.aimlabs.gaming.AppServer"
+    //     ports = ['8080']
+    //     labels = ['org.opencontainers.image.source': "https://github.com/${orgName}/${project.getRootProject().name}"]
+    // }
+
+    // extraDirectories {
+    //     paths {
+    //         path {
+    //             // copies the contents of 'src/main/extra-dir' into '/' on the container
+    //             from = file('build/libs/engines')
+    //             into = '/workspace/engines'
+    //         }
+    //         path {
+    //             // copies the contents of 'src/main/another/dir' into '/extras' on the container
+    //             from = file("docker/htcheck")
+    //             into = '/workspace/utils'
+    //         }
+    //     }
+
+    //     permissions = [
+    //             '/workspace/utils/htcheck': '777',  // Read/write/execute for owner, read/execute for group/other
+    //             //'/path/to/another/file': '644',  // Read/write for owner, read-only for group/other
+    //             //'/glob/pattern/**/*.sh': 755
+    //     ]
+    // }
+}
+
+//jib.dependsOn copyEngines
+build.dependsOn copyEngines
