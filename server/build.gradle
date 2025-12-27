@@ -136,6 +136,11 @@ tasks.register('runLocalTestServer', JavaExec) {
     // Forward any args: ./gradlew :server:runLocalTestServer --args="--spring.profiles.active=..."
 }
 
+// workaround https://github.com/GoogleContainerTools/jib/issues/3132
+    tasks.matching { it.name in ['jibDockerBuild', 'jibBuildTar', 'jib'] }.configureEach {
+            notCompatibleWithConfigurationCache("Jib is not compatible with configuration cache")
+    }
+
 
 
 jib {
@@ -153,19 +158,19 @@ jib {
             }
         }
     }
-    // to {
-    //     image = "ghcr.io/${orgName}/rgs:$deployment_tag"
-    //     auth {
-    //         username = System.getenv("GPR_USER")
-    //         password = System.getenv("GPR_KEY")
-    //     }
-    //     //  tags = ["latest"]
-    // }
-    // container {
-    //     mainClass = "in.aimlabs.gaming.AppServer"
-    //     ports = ['8080']
-    //     labels = ['org.opencontainers.image.source': "https://github.com/${orgName}/${project.getRootProject().name}"]
-    // }
+    to {
+        image = "ghcr.io/${orgName}/rgs:$deployment_tag"
+        auth {
+            username = System.getenv("GPR_USER")
+            password = System.getenv("GPR_KEY")
+        }
+        //  tags = ["latest"]
+    }
+    container {
+        mainClass = "in.aimlabs.gaming.AppServer"
+        ports = ['8080']
+        labels = ['org.opencontainers.image.source': "https://github.com/${orgName}/${project.getRootProject().name}"]
+    }
 
     // extraDirectories {
     //     paths {
@@ -188,6 +193,3 @@ jib {
     //     ]
     // }
 }
-
-//jib.dependsOn copyEngines
-build.dependsOn copyEngines
