@@ -45,10 +45,11 @@ public class PlayerConnectController {
     AggregatorPlayerServiceManager aggregatorPlayerServiceManager;
 
 
+
     @PostMapping(
-            value = "/player-transaction"
+            value = "/player-initialise"
     )
-    public PlayerInitialiseResponse playerInitialise(PlayerInitialiseRequest request,
+    public PlayerInitialiseResponse playerInitialise(@RequestBodyPlayerInitialiseRequest request,
                                                      HttpServletRequest httpServletRequest,
                                                      @RequestHeader(defaultValue = "default") String tenant) {
 
@@ -57,7 +58,7 @@ public class PlayerConnectController {
     }
 
     @PostMapping(
-            value = "/player-initialise"
+            value = "/player-transaction"
     )
     public PlayerTransactionResponse playerTransaction(@RequestBody PlayerTransactionRequest request,
                                                        HttpServletRequest httpServletRequest,

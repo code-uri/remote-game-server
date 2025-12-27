@@ -168,8 +168,8 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         String sessionKey = getSessionKey(uid); // Key = "session-123", Value = startTim
 
         getRedisTemplate()
-                .opsForValue().setGet(sessionKey, expirationInSeconds,
-                        Duration.ofSeconds(getGameSessionExpirationSecs()));
+            .opsForValue().set(sessionKey, expirationInSeconds,
+                Duration.ofSeconds(getGameSessionExpirationSecs()));
         return true;
     }
 
