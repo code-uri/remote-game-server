@@ -7,6 +7,7 @@ import aimlabs.gaming.rgs.gameoperators.GameReplayRequest;
 import aimlabs.gaming.rgs.gameskins.GameLaunchRequest;
 import aimlabs.gaming.rgs.gameskins.LaunchMode;
 
+import aimlabs.gaming.rgs.tenant.TenantContextHolder;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,10 +53,12 @@ public class GameLaunchController {
 
         String partner = brand;
 
-        GameLaunchRequest launchRequest = new GameLaunchRequest(null, partner, brand, token, gameId, queryParams);
+        GameLaunchRequest launchRequest = new GameLaunchRequest(TenantContextHolder.getTenant(), partner, brand, token, gameId, queryParams);
         launchRequest.setIpAddress(getRemoteIPAddress(request));
         launchRequest.setBrandUrl(getRefererHeader(request).orElse(null));
 
+
+        log.info("Launching game with request: {}", launchRequest);
         URI uri = gameRequestHandler
                 .launchGame(launchRequest);
 

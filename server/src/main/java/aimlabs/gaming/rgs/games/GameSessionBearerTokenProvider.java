@@ -45,16 +45,16 @@ public class GameSessionBearerTokenProvider implements AuthenticationConverter {
         if (session.getUid() == null)
             throw new BaseRuntimeException(SystemErrorCode.SYSTEM_ERROR, "GameSession uid cannot be null.");
 
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("sub", session.getUid());
+        map.put("jti", UUID.randomUUID().toString());
+        map.put("roles", "PLAYER");
+        map.put("brand", session.getBrand());
+        map.put("game", session.getGame());
+        map.put("currency", session.getCurrency());
+        map.put("player", session.getPlayer());
         return jwtUtil.generateJws(new HashMap<>(),
-                Map.of(
-                        "sub", session.getUid(),
-                        "jti", UUID.randomUUID().toString(),
-                        "roles", "PLAYER",
-                        "brand", session.getBrand(),
-                        "game", session.getGame(),
-                        "currency", session.getCurrency(),
-                        "player", session.getPlayer()
-        ), Duration.ofDays(1));
+                map, Duration.ofDays(1));
     }
 
     public Authentication getAuthentication(String bearerToken) {

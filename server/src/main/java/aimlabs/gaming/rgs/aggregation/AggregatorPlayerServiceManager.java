@@ -12,6 +12,7 @@ import aimlabs.gaming.rgs.gamerounds.GameRoundStatusEnum;
 import aimlabs.gaming.rgs.gamerounds.IGameRoundService;
 import aimlabs.gaming.rgs.games.GameSupplierLocator;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
+import aimlabs.gaming.rgs.gamesessions.GameSessionContext;
 import aimlabs.gaming.rgs.gamesessions.IGameSessionService;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.players.*;
@@ -29,7 +30,7 @@ import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
 
 import javax.money.CurrencyUnit;
-import java.util.Calendar;
+import java.lang.ScopedValue;
 import java.util.Map;
 import java.util.Optional;
 
@@ -115,10 +116,17 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
 
             Player player = playerService.findOneByUid(gameRound.getPlayer());
             GameSession gameSession = gameSessionService.findOneByUid(request.getToken());
+
+            if (gameSession == null) {
+                throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+            }
+
+            GameSession currentGameSession = gameSession;
             try {
-                playerTransactionResponse = processTransaction(request, gameRound, gameSession, player, false);
+                playerTransactionResponse = ScopedValue.where(GameSessionContext.GAME_SESSION, currentGameSession)
+                        .call(() -> processTransaction(request, gameRound, currentGameSession, player, false));
             } catch (Exception e) {
-                gameRound = gameRoundService.updatePartial(gameRound.getUid(), Map.of("status", Status.ERROR));
+                gameRoundService.updatePartial(gameRound.getUid(), Map.of("status", Status.ERROR));
                 throw e;
             }
         } else {
@@ -129,12 +137,16 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
             if (gameSession == null)
                 throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
 
+            GameSession currentGameSession = gameSession;
+
             if (gameRound == null) {
-                playerTransactionResponse = handleNewGameRound(request, gameSession);
+                playerTransactionResponse = ScopedValue.where(GameSessionContext.GAME_SESSION, currentGameSession)
+                        .call(() -> handleNewGameRound(request, currentGameSession));
             } else {
                 Player player = playerService.findOneByUid(gameRound.getPlayer());
 
-                playerTransactionResponse = processTransaction(request, gameRound, gameSession, player, false);
+                playerTransactionResponse = ScopedValue.where(GameSessionContext.GAME_SESSION, currentGameSession)
+                        .call(() -> processTransaction(request, gameRound, currentGameSession, player, false));
 
             }
         }
@@ -154,15 +166,15 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
         else {
             try {
 
-                    playerTransactionResponse = transactionService.handleTransaction(txn, txn.getTxnId(), gameRound, gameSession, player, rollbackRequired,
-                            (txn.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED || txn.getGameRoundStatus() == GameRoundStatusEnum.CLOSED));
+                playerTransactionResponse = transactionService.handleTransaction(txn, txn.getTxnId(), gameRound, gameSession, player, rollbackRequired,
+                        (txn.getGameRoundStatus() == GameRoundStatusEnum.COMPLETED || txn.getGameRoundStatus() == GameRoundStatusEnum.CLOSED));
             } catch (BaseRuntimeException err) {
 
-                    if(err.getErrorCode()==SystemErrorCode.ROLLBACK_GAME_ROUND){
-                        playerTransactionResponse = rollback(txn);
+                if(err.getErrorCode()==SystemErrorCode.ROLLBACK_GAME_ROUND){
+                    playerTransactionResponse = rollback(txn);
 
-                        throw new BaseRuntimeException(SystemErrorCode.GAME_ROUND_CANCELLED);
-                    }
+                    throw new BaseRuntimeException(SystemErrorCode.GAME_ROUND_CANCELLED);
+                }
 
             }
         }
@@ -179,61 +191,62 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
     public PlayerInitialiseResponse playerInitialise(PlayerInitialiseRequest request) {
         //log.info("request received");
         //log.info("session {} headers {}", webExchange.getRequest().getQueryParams(), webExchange.getRequest().getHeaders() );
-        long startTime = System.currentTimeMillis();
-
-
         if (request.getSessionToken() == null) {
             throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
         }
 
         String sessionToken = request.getSessionToken();
-        GameSession gameSession = gameSessionService.findOneByUid(sessionToken);
+        GameSession initialGameSession = gameSessionService.findOneByUid(sessionToken);
 
-        if(gameSession==null)
+        if(initialGameSession==null)
             throw new BaseRuntimeException(SystemErrorCode.INVALID_TOKEN);
 
+        return ScopedValue.where(GameSessionContext.GAME_SESSION, initialGameSession).call(() -> {
+            GameSession gameSession = initialGameSession;
 
-        Player player = playerService.findOneByUid(gameSession.getPlayer());
+            Player player = playerService.findOneByUid(gameSession.getPlayer());
 
-        PlayerInfo playerInfo = playerService.initialise(player.getNetwork(), gameSession.getUid(),
-                gameSession.getToken(),
-                gameSession.getPlayer(),
-                gameSession.getBrand(),
-                gameSession.getGame(),
-                true);
+            PlayerInfo playerInfo = playerService.initialise(player.getNetwork(),
+                    gameSession.getToken(),
+                    player.getCorrelationId(),
+                    gameSession.getCurrency(),
+                    gameSession.getBrand(),
+                    gameSession.getGame(),
+                    true);
 
-        PlayerInitialiseResponse response = new PlayerInitialiseResponse();
-        response.setPlayerId(playerInfo.getUid());
-        response.unWrapWallet(PlayerWalletUtils.asWallet(playerInfo.getWallet()));
+            PlayerInitialiseResponse response = new PlayerInitialiseResponse();
+            response.setPlayerId(playerInfo.getUid());
+            response.unWrapWallet(PlayerWalletUtils.asWallet(playerInfo.getWallet()));
 
-        //response.setRegulationSettings(new RGSettings());
-        response.setTags(playerInfo.getTags());
-        //response.setTotalBalance(wallet.getTotalAvailable().getAmount());
+            //response.setRegulationSettings(new RGSettings());
+            response.setTags(playerInfo.getTags());
+            //response.setTotalBalance(wallet.getTotalAvailable().getAmount());
 
-        gameSession.setAggregateCredits(!playerInfo.isSupportsMultiCredits());
-        if(!gameSession.getToken().equals(playerInfo.getExternalToken())) {
+            gameSession.setAggregateCredits(!playerInfo.isSupportsMultiCredits());
+            if(!gameSession.getToken().equals(playerInfo.getExternalToken())) {
 //                                                gameSession.setPlayer(playerInfo.getUid());
 //                                                gameSession.setToken(playerInfo.getExternalToken());
 
-            gameSession = gameSessionService.findOneByToken(playerInfo.getExternalToken());
+                gameSession = gameSessionService.findOneByToken(playerInfo.getExternalToken());
 
-            if(gameSession==null){
-                gameSession = gameSessionService.createGameSession(gameSession, request.getGameId(), playerInfo.getUid(), response.getCurrency(), playerInfo.getExternalToken() );
+                if(gameSession==null){
+                    gameSession = gameSessionService.createGameSession(gameSession, request.getGameId(), playerInfo.getUid(), response.getCurrency(), playerInfo.getExternalToken() );
+                }
+
+
+                response.setExternalToken(gameSession.getUid());
+                return response;
             }
+            else{
+                gameSession =  gameSessionService.updatePartial(gameSession.getUid(), Map.of("player", playerInfo.getUid(), "currency", response.getCurrency(),
+                        "aggregateCredits", gameSession.isAggregateCredits()));
 
 
-            response.setExternalToken(gameSession.getUid());
-            return response;
-        }
-        else{
-            gameSession =  gameSessionService.updatePartial(gameSession.getUid(), Map.of("player", playerInfo.getUid(), "currency", response.getCurrency(),
-                    "aggregateCredits", gameSession.isAggregateCredits()));
+                response.setExternalToken(sessionToken);
+                return response;
 
-
-            response.setExternalToken(sessionToken);
-            return response;
-
-        }
+            }
+        });
 
     }
 
@@ -257,37 +270,23 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
         if (gameRound.getStatus() != Status.CANCELLED){
             Pair<GameRound, Optional<PlayerWallet>> pair = gameRoundService.rollback(gameSession, gameRound, player);
 
-                //Optional player wallet
-                PlayerTransactionResponse response = new PlayerTransactionResponse();
-                readLastTransaction(pair.getFirst(), response);
-                return response;
+            //Optional player wallet
+            PlayerTransactionResponse response = new PlayerTransactionResponse();
+            readLastTransaction(pair.getFirst(), response);
+            return response;
 
         }
         else {
             log.info("transaction ignored with txnType {} gameRound {}", txn.getRequestType(), txn.getGameRoundId());
             PlayerWallet playerWallet = getPlayerWallet(gameSession);
 
-                PlayerTransactionResponse response = new PlayerTransactionResponse();
-                response.setWallet(PlayerWalletUtils.asWallet(playerWallet));
-                readLastTransaction(gameRound, response);
+            PlayerTransactionResponse response = new PlayerTransactionResponse();
+            response.setWallet(PlayerWalletUtils.asWallet(playerWallet));
+            readLastTransaction(gameRound, response);
 
-                return response;
+            return response;
         }
     }
-
-    private static Boolean hasGameSessionExpired(PlayerTransactionRequest txn, GameRound gameRound, GameSession gameSession) {
-        if (txn.getRequestType() == TransactionType.DEBIT) {
-            Calendar calendar = Calendar.getInstance();
-            calendar.add(Calendar.HOUR, -24);//TODO 24 hrs
-            if (gameRound.getStatus() == Status.COMPLETED || gameRound.getStatus() == Status.CANCELLED || gameRound.getStatus() == Status.ERROR || gameRound.getModifiedOn().compareTo(calendar.getTime()) < 0) {
-                throw new BaseRuntimeException(SystemErrorCode.GAME_ROUND_CLOSED);
-            }
-
-            return gameSession.getModifiedOn().compareTo(calendar.getTime()) < 0;
-        }
-        return false;
-    }
-
 
     public PlayerWallet getPlayerWallet(GameSession gameSession) {
         Player player = playerService.findOneByUid(gameSession.getPlayer());
@@ -342,13 +341,16 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
                     txn.getDebit(), txn.getCredit(), txn.getRequestType(),
                     Status.valueOf(txn.getGameRoundStatus().name()),
                     txn.getFreeSpins());
+            log.info("Existing Game round {} ", gameRound.getUid());
         }else{
             gameRound = gameRoundService.createGameRound(txn.getGameRoundId(), gameSession, txn.getGameId(),
                     "SLOTS", player, null, txn.getTxnId(),
                     txn.getDebit(), txn.getCredit(), txn.getRequestType(),
                     Status.valueOf(txn.getGameRoundStatus().name()),
                     txn.getFreeSpins());
+            log.info("Game round created {} ", gameRound);
         }
+
 
 
         CurrencyUnit currencyUnit = currencyService.getCurrency(gameSession.getCurrency());

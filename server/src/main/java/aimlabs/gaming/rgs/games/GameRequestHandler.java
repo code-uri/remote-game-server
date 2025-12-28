@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import lombok.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -55,6 +56,7 @@ import aimlabs.gaming.rgs.players.PlayerService;
 import aimlabs.gaming.rgs.settings.GameSettingsService;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import redis.clients.jedis.resps.Tuple;
 
 @Data
 @Slf4j
@@ -112,7 +114,7 @@ public class GameRequestHandler implements IGameLaunchService{
         gameSession.setGameConnector(brandGame.game().getConnector());
 
         Player player;
-        if (!launchRequest.isDemo()) {
+        if (!launchRequest.isDemo() && launchRequest.getPlayer() != null) {
             player = playerService.findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(brandGame.brand().getNetwork(), brandGame.brand().getUid(),
                     launchRequest.getPlayer() == null ? launchRequest.getToken() : launchRequest.getPlayer(), null);
         } else {
@@ -141,28 +143,53 @@ public class GameRequestHandler implements IGameLaunchService{
     }
 
     public Pair<GameSession, JsonNode> initialiseGame(String token, String brandId, String gameId) {
-        // get brand and gameskin
         boolean isDemoGame = token.toLowerCase().startsWith("demo");
-        GameSession gameSession = gameSessionService.findOneByToken(token);
-        BrandGameAggregate brandGame = brandGameService
-                .findOneByNetworkAndBrandAndGameId(isDemoGame ? "default" : gameSession.getNetwork(), brandId, gameId);
+        GameSession gameSessionCurrent = gameSessionService.findOneByUid(token);
 
+        String network = "default";
+        if(!isDemoGame ){
+            if(gameSessionCurrent == null){
+                throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+            }
+            network = gameSessionCurrent.getNetwork();
+        }
+
+        BrandGameAggregate brandGame = brandGameService
+                .findOneByNetworkAndBrandAndGameId(network , brandId, gameId);
         String tenant = brandGame.brand().getTenant();
         Brand brand = brandGame.brand();
         GameSkin gameSkin = brandGame.game();
 
-        PlayerInfo playerInfo = initialisePlayer(token, null, null, brand, gameSkin);
-        gameSession = gameSessionService.findOneByToken(playerInfo.getExternalToken());
+        PlayerInfo playerInfo = null;
+
+        if(isDemoGame) {
+            GameSession gameSession = gameSessionCurrent;
+            playerInfo = ScopedValue.where(
+                            GameSessionContext.GAME_SESSION, gameSession)
+                    .call(() -> {
+                        return initialisePlayerDemo(token, gameSession!=null?gameSession.getCurrency():brand.getCurrency(), brand, gameSkin);
+                    });
+        }else {
+            GameSession gameSession = gameSessionCurrent;
+            Player player = playerService.findOneByUid(gameSession.getPlayer());
+
+            playerInfo = ScopedValue.where(
+                            GameSessionContext.GAME_SESSION, gameSession)
+                    .call(() -> {
+                        return playerService.initialise(brand.getNetwork(), gameSession.getToken(), player != null ? player.getCorrelationId() : null,
+                                gameSession.getCurrency(),
+                                gameSession.getBrand(), gameSkin.getUid(), true);
+                            });
+
+            //check if external token game session exists or operator must have changed the token.
+            gameSessionCurrent = gameSessionService.findOneByToken(playerInfo.getExternalToken());
+            gameSessionService.keepSessionAlive(gameSessionCurrent.getUid());
+        }
 
         Boolean unfinishedGameRoundExists = gameRoundService.isUnfinishedGameRoundExists(playerInfo.getUid(), gameId);
         if (!unfinishedGameRoundExists && !brand.getStatus().equals(Status.ACTIVE)) {
             throw new BaseRuntimeException(SystemErrorCode.INACTIVE_GAME);
         }
-
-        GamePlayContext ctx = new GamePlayContext(gameSession, brandGame.brand(), brandGame.game());
-
-        // load player
-        Player player = playerService.findOneByUid(playerInfo.getPlayer());
 
         Map<String, Object> settings = gameSettingService.findGameSettingsForCurrency(tenant,
                 brandId,
@@ -170,37 +197,28 @@ public class GameRequestHandler implements IGameLaunchService{
 
         String gameConfiguration = (String) settings.getOrDefault("gameConfiguration", gameSkin.getGameConfiguration());
 
-        if (gameSession != null) {
-            if (!gameConfiguration.equals(gameSession.getGameConfiguration()))
+        if (gameSessionCurrent != null) {
+            if (!gameConfiguration.equals(gameSessionCurrent.getGameConfiguration()))
                 throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
                         "Invalid game session. Please re-launch the game.");
+        }
 
-            if (gameSession.isDemo()) {
-                gameSessionService.setExpiration(gameSession.getUid(), System.currentTimeMillis());
-            } else {
-                gameSessionService.keepSessionAlive(gameSession.getUid());
-            }
-
-        } else {
-
-            GameSession session = new GameSession(tenant, brand.getUid(),
-                    isDemoGame ? playerInfo.getExternalToken() : playerInfo.getUid(),
+        if (isDemoGame && gameSessionCurrent == null) {
+            GameSession demoGameSession = new GameSession(tenant, brand.getUid(),
+                    token,
                     playerInfo.getWallet().getCurrency());
-            session.setNetwork(brand.getNetwork());
-            session.setGame(gameSkin.getUid());
-            session.setDemo(isDemoGame);
-            session.setProviderGame(gameSkin.getProviderGame());
-            session.setToken(playerInfo.getExternalToken());
-            session.setPlayerTags(playerInfo.getTags());
-            session.setGameConfiguration(gameConfiguration);
-            gameSession = gameSessionService.createGameSession(session);
+            demoGameSession.setNetwork(brand.getNetwork());
+            demoGameSession.setGame(gameSkin.getUid());
+            demoGameSession.setDemo(true);
+            demoGameSession.setProviderGame(gameSkin.getProviderGame());
+            demoGameSession.setToken(playerInfo.getExternalToken());
+            demoGameSession.setPlayerTags(playerInfo.getTags());
+            demoGameSession.setGameConfiguration(gameConfiguration);
+            gameSessionCurrent = gameSessionService.createGameSession(demoGameSession);
+            gameSessionService.setExpiration(gameSessionCurrent.getUid(), System.currentTimeMillis());
         }
 
-        if (gameSession == null) {
-            throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "game session is null");
-        }
-
-        JsonNode response = getResponseJsonNode(gameSession, gameSkin, settings);
+        JsonNode response = getResponseJsonNode(gameSessionCurrent, gameSkin, settings);
 
         ObjectNode walletNode = objectMapper.valueToTree(playerInfo.getWallet());
         walletNode.put("fractions",
@@ -211,7 +229,17 @@ public class GameRequestHandler implements IGameLaunchService{
         playerWallet.set("wallet", walletNode);
         ((ObjectNode) response).set("playerInfo", playerWallet);
 
-        return Pair.of(gameSession, response);
+        return Pair.of(gameSessionCurrent, response);
+    }
+
+    private PlayerInfo initialisePlayerDemo(String token, String currency, Brand brand, GameSkin gameSkin) {
+        return playerService.initialise(brand.getNetwork(),
+                token,
+                null,
+                currency,
+                brand.getUid(),
+                gameSkin.getUid(),
+                true);
     }
 
     private JsonNode getResponseJsonNode(GameSession gameSession, GameSkin gameSkin, Map<String, Object> settings) {
@@ -230,37 +258,6 @@ public class GameRequestHandler implements IGameLaunchService{
 
     }
 
-    PlayerInfo initialisePlayer(String token,
-            String playerId,
-            String currency,
-            Brand brand,
-            GameSkin gameSkin) {
-        GameSession gameSession = gameSessionService.findOneByUid(token);
-
-        if (gameSession != null) {
-            if (gameSession.isDemo()) {
-                return playerService.initialise(gameSession.getNetwork(),
-                        gameSession.getToken(),
-                        null,
-                        null,
-                        brand.getUid(),
-                        gameSkin.getUid(),
-                        true);
-            }
-
-            Player player = playerService.findOneByUid(gameSession.getPlayer());
-            if (player == null) {
-                throw new BaseRuntimeException(SystemErrorCode.PLAYER_NOT_FOUND);
-            }
-            return playerService.initialise(player.getNetwork(), token, player.getCorrelationId(),
-                    gameSession.getCurrency(),
-                    gameSession.getBrand(), gameSkin.getUid(), true);
-        } else {
-            return playerService.initialise(brand.getNetwork(), token, playerId, currency,
-                    brand.getUid(), gameSkin.getUid(), true);
-        }
-
-    }
 
     public JsonNode playGame(GameSession gameSession, JsonNode requestJsonNode) {
 

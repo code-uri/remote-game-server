@@ -75,9 +75,12 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         newSession.setUid(gameSession.isDemo() ? gameSession.getToken() : UUID.randomUUID().toString());
         newSession.setStartedAt(gameSession.getStartedAt() != null ? gameSession.getStartedAt() : new Date());
         newSession.setNetwork(brand.getNetwork());
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("player", newSession.getPlayer());
+        map.put("brand", newSession.getBrand());
+
         String jwt = jwtUtil.generateJws(new HashMap<>(),
-                Map.of("brand", gameSession.getBrand(),
-                        "player", gameSession.getPlayer()),
+                map,
                 Duration.ofDays(1));
         newSession.setJwt(jwt);
         newSession.setDemo(gameSession.isDemo());
@@ -97,7 +100,7 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         if (brand.getJurisdiction() != null && newSession.getJurisdiction() == null)
             newSession.setJurisdiction(brand.getJurisdiction());
 
-         if(newSession.getJurisdiction()!=null)
+        if(newSession.getJurisdiction()!=null)
         {
             newSession.setRealityCheckIntervalInSeconds(gameSession.getRealityCheckIntervalInSeconds());
             if (brand.getRealityCheckIntervalInMilliSeconds() > 0 && newSession.getRealityCheckIntervalInSeconds() == 0)
@@ -120,7 +123,7 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
     }
 
     public GameSession findOneByGameConnectorAndCorrelationIdAndStatus(String gameConnector, String correlationId,
-            Status status) {
+                                                                       Status status) {
         return getMapper()
                 .asDto(store.findOneByGameConnectorAndCorrelationIdAndStatus(gameConnector, correlationId, status));
     }
@@ -168,8 +171,8 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         String sessionKey = getSessionKey(uid); // Key = "session-123", Value = startTim
 
         getRedisTemplate()
-            .opsForValue().set(sessionKey, expirationInSeconds,
-                Duration.ofSeconds(getGameSessionExpirationSecs()));
+                .opsForValue().set(sessionKey, expirationInSeconds,
+                        Duration.ofSeconds(getGameSessionExpirationSecs()));
         return true;
     }
 
@@ -184,13 +187,13 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
     }
 
     public GameSession createGameSession(GameLaunchRequest glr,
-            String player,
-            String currency,
-            GameSkin gameSkin,
-            String gameConfiguration,
-            Brand brand,
-            String tenant,
-            String correlationId) {
+                                         String player,
+                                         String currency,
+                                         GameSkin gameSkin,
+                                         String gameConfiguration,
+                                         Brand brand,
+                                         String tenant,
+                                         String correlationId) {
 
         boolean isDemoGame = glr.getToken() != null && glr.getToken().toLowerCase().startsWith("demo") || glr.isDemo();
 
@@ -217,7 +220,7 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
             newSession.setJurisdiction(brand.getJurisdiction());
 
         if (newSession.getJurisdiction() != null) {
-             newSession.setRealityCheckIntervalInSeconds(Duration.ofMillis(glr.getRealityCheckIntervalInMilliSeconds()).toSeconds());
+            newSession.setRealityCheckIntervalInSeconds(Duration.ofMillis(glr.getRealityCheckIntervalInMilliSeconds()).toSeconds());
             if (brand.getRealityCheckIntervalInMilliSeconds() > 0 && newSession.getRealityCheckIntervalInSeconds() == 0)
                 newSession.setRealityCheckIntervalInSeconds(Duration.ofMillis(brand.getRealityCheckIntervalInMilliSeconds()).toSeconds());
 
@@ -236,8 +239,8 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
 
     @Override
     public GameSession createGameSessionForGameLaunchRequest(GameLaunchRequest glr, String player, String currency,
-            GameSkin gameSkin, String gameConfiguration, Brand brand, String tenant,
-            boolean alwaysNewSession) {
+                                                             GameSkin gameSkin, String gameConfiguration, Brand brand, String tenant,
+                                                             boolean alwaysNewSession) {
 
         if (alwaysNewSession) {
             return createGameSession(glr, player, currency, gameSkin, gameConfiguration, brand, tenant, null);
@@ -253,7 +256,7 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
     }
 
     public GameSession createGameSession(GameSession gameSession, String gameId, String player, String currency,
-            String token) {
+                                         String token) {
 
         GameSession newSession = new GameSession(gameSession.getTenant(), gameSession.getBrand(),
                 player,
@@ -283,9 +286,12 @@ public class GameSessionService extends AbstractEntityService<GameSession, GameS
         newSession.setRealityCheckIntervalInSeconds(gameSession.getRealityCheckIntervalInSeconds());
         newSession.setElapsedTimeInSeconds(gameSession.getElapsedTimeInSeconds());
 
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("player", newSession.getPlayer());
+        map.put("brand", newSession.getBrand());
+
         String jwt = jwtUtil.generateJws(new HashMap<>(),
-                Map.of("brand", newSession.getBrand(),
-                        "player", newSession.getPlayer()),
+                map,
                 Duration.ofDays(1));
         newSession.setJwt(jwt);
 

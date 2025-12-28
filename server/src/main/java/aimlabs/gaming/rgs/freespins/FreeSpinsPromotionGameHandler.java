@@ -75,13 +75,15 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
         else {
             Promotion promotion = promotionStore.findPromotionsByGameAndPlayer(gameSession, gameSkin.getUid());
 
-            freeSpinsAllotment = freeSpinsIssueStore.findOneByPromotionIdAndGameAndPlayer(promotion.getId(),
-                    gameSkin.getUid(),
-                    gameSession.getPlayer(),
-                    List.of(Status.COMPLETED));
+            if(promotion!=null){
+                freeSpinsAllotment = freeSpinsIssueStore.findOneByPromotionIdAndGameAndPlayer(promotion.getId(),
+                        gameSkin.getUid(),
+                        gameSession.getPlayer(),
+                        List.of(Status.COMPLETED));
 
-            if (freeSpinsAllotment == null) {
-                promoBonus = createPromoBonusFromSettings(promotion, gameSession, settings);
+                if (freeSpinsAllotment == null) {
+                    promoBonus = createPromoBonusFromSettings(promotion, gameSession, settings);
+                }
             }
         }
         if (promoBonus != null)
@@ -245,11 +247,11 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
 
     @Override
     public JsonNode loadData(GameSession gameSession, GameSkin gameSkin, Map<String, Object> settings) {
-        ObjectNode promotionResponse = objectMapper.createObjectNode();
+
 
         if (gameSession.isDemo())
             return null;
-
+        ObjectNode promotionResponse = objectMapper.createObjectNode();
         return loadDate(promotionResponse, gameSkin, gameSession, settings);
     }
 }

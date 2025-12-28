@@ -20,7 +20,7 @@ public class PlayerStore extends MongoEntityStore<PlayerDocument> {
                 .and("network").is(network)
                 .and("brand").is(brand)
                 .and("correlationId").is(correlationId)
-                .and("deleted").is(false)), Player.class);
+                .and("deleted").is(false)), Player.class, "Players");
 
     }
 

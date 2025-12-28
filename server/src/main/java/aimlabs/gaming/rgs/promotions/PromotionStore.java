@@ -3,6 +3,7 @@ package aimlabs.gaming.rgs.promotions;
 import aimlabs.gaming.rgs.core.MongoEntityStore;
 import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
+import jakarta.annotation.Nullable;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ class PromotionStore extends MongoEntityStore<PromotionDocument> {
     @Autowired
     PromotionMapper mapper;
 
+    @Nullable
     public Promotion findPromotionsByGameAndPlayer(GameSession gameSession, String game) {
 
         return  getTemplate()

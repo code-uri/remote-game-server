@@ -125,6 +125,23 @@ tasks.named('test') {
 }
 
 
+bootJar {
+    archiveClassifier = 'all'
+    //requiresUnpack  "**/*.jar"
+    manifest {
+        attributes 'Main-Class': 'org.springframework.boot.loader.PropertiesLauncher'
+        attributes 'Start-Class': 'aimlabs.gaming.rgs.RemoteGameServer'
+    }
+}
+
+springBoot {
+    mainClass = 'aimlabs.gaming.rgs.RemoteGameServer'
+}
+
+//tasks.named("bootRun") {
+//    mainClass = 'in.aimlabs.gaming.AppServer'
+//}
+
 tasks.register('runLocalTestServer', JavaExec) {
     group = 'application'
     description = 'Runs RemoteGameServerLocalServer using the test runtime classpath (includes src/test/resources).'
@@ -167,29 +184,32 @@ jib {
         //  tags = ["latest"]
     }
     container {
-        mainClass = "in.aimlabs.gaming.AppServer"
+        mainClass = "aimlabs.gaming.rgs.RemoteGameServer"
         ports = ['8080']
         labels = ['org.opencontainers.image.source': "https://github.com/${orgName}/${project.getRootProject().name}"]
     }
 
-    // extraDirectories {
-    //     paths {
-    //         path {
-    //             // copies the contents of 'src/main/extra-dir' into '/' on the container
-    //             from = file('build/libs/engines')
-    //             into = '/workspace/engines'
-    //         }
-    //         path {
-    //             // copies the contents of 'src/main/another/dir' into '/extras' on the container
-    //             from = file("docker/htcheck")
-    //             into = '/workspace/utils'
-    //         }
-    //     }
+     extraDirectories {
+         paths {
+             path {
+                 // copies the contents of 'src/main/extra-dir' into '/' on the container
+                 from = file('build/libs/engines')
+                 into = '/workspace/engines'
+             }
+             path {
+                 // copies the contents of 'src/main/another/dir' into '/extras' on the container
+                 from = file("docker/htcheck")
+                 into = '/workspace/utils'
+             }
+         }
 
-    //     permissions = [
-    //             '/workspace/utils/htcheck': '777',  // Read/write/execute for owner, read/execute for group/other
-    //             //'/path/to/another/file': '644',  // Read/write for owner, read-only for group/other
-    //             //'/glob/pattern/**/*.sh': 755
-    //     ]
-    // }
+         permissions = [
+                 '/workspace/utils/htcheck': '777',  // Read/write/execute for owner, read/execute for group/other
+                 //'/path/to/another/file': '644',  // Read/write for owner, read-only for group/other
+                 //'/glob/pattern/**/*.sh': 755
+         ]
+     }
 }
+
+
+build.dependsOn copyEngines

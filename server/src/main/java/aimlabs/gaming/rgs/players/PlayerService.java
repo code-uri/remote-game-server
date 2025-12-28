@@ -47,6 +47,7 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
     @Override
     public Player saveOrUpdate(Player player) {
         Player existingPlayer = findByCorrelationidAndNetworkAndBrand(player.getNetwork(), player.getBrand(), player.getCorrelationId());
+        log.info("existingPlayer found: {}", existingPlayer);
         if(existingPlayer == null)
             return super.create(player);
         else if(player.getTags()!=null){

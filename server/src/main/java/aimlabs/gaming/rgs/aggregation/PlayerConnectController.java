@@ -49,11 +49,12 @@ public class PlayerConnectController {
     @PostMapping(
             value = "/player-initialise"
     )
-    public PlayerInitialiseResponse playerInitialise(@RequestBodyPlayerInitialiseRequest request,
+    public PlayerInitialiseResponse playerInitialise(@RequestBody  PlayerInitialiseRequest request,
                                                      HttpServletRequest httpServletRequest,
                                                      @RequestHeader(defaultValue = "default") String tenant) {
 
         request.setTenant(tenant);
+        log.info("Player Initialise Request: {}", request);
         return aggregatorPlayerServiceManager.playerInitialise(request);
     }
 
@@ -65,6 +66,7 @@ public class PlayerConnectController {
                                                        @RequestHeader(defaultValue = "default") String tenant) {
 
         request.setTenant(tenant);
+        log.info("Player transaction Request: {}", request);
         return aggregatorPlayerServiceManager.playerTransaction(request);
     }
 
@@ -77,6 +79,7 @@ public class PlayerConnectController {
                                 @RequestHeader(defaultValue = "default") String tenant) {
 
         request.setTenant(tenant);
+        log.info("Player balance Request: {}", request);
         return aggregatorPlayerServiceManager.playerBalance(request);
 
     }
@@ -87,6 +90,7 @@ public class PlayerConnectController {
                                               @RequestHeader(defaultValue = "default") String tenant) {
 
         request.setTenant(tenant);
+        log.info("Player rollback Request: {}", request);
         return aggregatorPlayerServiceManager.playerTransaction(request);
     }
 }

@@ -126,9 +126,11 @@ public class TransactionService extends AbstractEntityService<Transaction, Trans
                                               boolean gameRoundCompleted
     ) {
 
+        Transaction transaction = null;
         if (extTxnId != null)
-            return findOneByCorrelationId(gameSession.getTenant(), extTxnId);
-
+            transaction = findOneByCorrelationId(gameSession.getTenant(), extTxnId);
+        if (transaction != null)
+            return transaction;
 
         CurrencyUnit currencyUnit = currencyService.getCurrency(gameSession.getCurrency());
 
@@ -136,46 +138,45 @@ public class TransactionService extends AbstractEntityService<Transaction, Trans
             throw new BaseRuntimeException(SystemErrorCode.INVALID_GAME_ROUND, "invalid game round status " + gameRound.getStatus());
         }
 
-        Transaction playerTransaction = new Transaction();
-        playerTransaction.setUid(UUID.randomUUID().toString());
-        playerTransaction.setGameRound(gameRound.getUid());
-        playerTransaction.setSession(gameSession.getUid());
-        playerTransaction.setPlayer(gameSession.getPlayer());
-        playerTransaction.setBrand(gameSession.getBrand());
-        playerTransaction.setGameId(gameRound.getGameId());
-        playerTransaction.setGameConfiguration(gameRound.getGameConfiguration());
-        playerTransaction.setGameActivity(gameActivity);
-        playerTransaction.setDemo(gameSession.isDemo());
-        playerTransaction.setGamePlay(gameRound.getGamePlay());
-        playerTransaction.setRollbackRequired(rollbackRequired);
+        transaction = new Transaction();
+        transaction.setGameRound(gameRound.getUid());
+        transaction.setSession(gameSession.getUid());
+        transaction.setPlayer(gameSession.getPlayer());
+        transaction.setBrand(gameSession.getBrand());
+        transaction.setGameId(gameRound.getGameId());
+        transaction.setGameConfiguration(gameRound.getGameConfiguration());
+        transaction.setGameActivity(gameActivity);
+        transaction.setDemo(gameSession.isDemo());
+        transaction.setGamePlay(gameRound.getGamePlay());
+        transaction.setRollbackRequired(rollbackRequired);
 
         MonetaryAmount zero = Money.ofMinor(currencyUnit, 0);
-        playerTransaction.setCredit(zero);
-        playerTransaction.setDebit(zero);
-        playerTransaction.setCurrency(gameSession.getCurrency());
+        transaction.setCredit(zero);
+        transaction.setDebit(zero);
+        transaction.setCurrency(gameSession.getCurrency());
 
         if (txnType == TransactionType.CREDIT) {
-            playerTransaction.setCredit(credit);
+            transaction.setCredit(credit);
             // playerTransaction.setJackpotDetails(gameRound.getJackpotDetails());
         } else if (txnType == TransactionType.DEBIT)
-            playerTransaction.setDebit(debit);
+            transaction.setDebit(debit);
         else if (txnType == TransactionType.DEBIT_CREDIT) {
-            playerTransaction.setDebit(debit);
-            playerTransaction.setCredit(credit);
+            transaction.setDebit(debit);
+            transaction.setCredit(credit);
         }
 
-        playerTransaction.setTxnType(txnType);
+        transaction.setTxnType(txnType);
 
         if (txnType == TransactionType.CREDIT && gameSession.isAggregateCredits() && !gameRoundCompleted)
-            playerTransaction.setStatus(Status.PENDING);
+            transaction.setStatus(Status.PENDING);
         else
-            playerTransaction.setStatus(Status.INPROGRESS);
+            transaction.setStatus(Status.INPROGRESS);
 
-        playerTransaction.setCorrelationId(extTxnId);
+        transaction.setCorrelationId(extTxnId);
 
 
-        playerTransaction.setAutoPlayed(false);
-        Transaction transaction = create(playerTransaction);
+        transaction.setAutoPlayed(false);
+        transaction = create(transaction);
 
         if (transaction.getStatus() == Status.COMPLETED ||
             (!gameRoundCompleted && gameSession.isAggregateCredits() && transaction.getStatus() == Status.PENDING))

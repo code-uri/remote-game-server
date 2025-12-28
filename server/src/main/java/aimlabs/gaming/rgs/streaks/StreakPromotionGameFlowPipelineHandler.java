@@ -210,9 +210,12 @@ public class StreakPromotionGameFlowPipelineHandler implements GameFlowPipelineH
         StreakCounterDocument streakCounterDocument = streakCounterStore.findActiveStreak(gameSession.getGame(),
                 gameSession.getPlayer(), gameSession.getCurrency());
 
-        ObjectNode playerBag = objectMapper.createObjectNode();
-        if (streakCounterDocument != null)
+        ObjectNode jsonNode = objectMapper.createObjectNode();
+        if (streakCounterDocument != null){
+            ObjectNode playerBag = objectMapper.createObjectNode();
             playerBag.put("streak", streakCounterDocument.getStreak());
-        return objectMapper.createObjectNode().set("playerBag", playerBag);
+            return jsonNode.set("playerBag", playerBag);
+        }
+        return jsonNode;
     }
 }

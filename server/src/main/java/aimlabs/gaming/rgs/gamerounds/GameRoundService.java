@@ -168,7 +168,8 @@ public class GameRoundService extends AbstractEntityService<GameRound, GameRound
             gameRound.setPromotionRefId(freeSpins.getCampaignUid());
 
         gameRound.setStatus(gameRoundStatus);
-        return getMapper().asDto(this.store.create(mapper.asEntity(gameRound)));
+        return create(gameRound);
+        //return getMapper().asDto(this.store.create(mapper.asEntity(gameRound)));
     }
 
 /*    private Mono<GameRound> updateGameRound(GameRound gameRound) {

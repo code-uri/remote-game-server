@@ -43,6 +43,9 @@ public class MockPAMController {
     MockPlayerServiceAdapter mockPlayerServiceAdapter;
 
     @Autowired
+    MockPlayerRepository mockPlayerRepository;
+
+    @Autowired
     RedisTemplate<String, String> redisTemplate;
 
     @Autowired
@@ -51,8 +54,7 @@ public class MockPAMController {
     private AtomicInteger readTimeOut = new AtomicInteger(3);
     private ConcurrentHashMap<String, String> gameRoundMockErrors = new ConcurrentHashMap<>();
     
-    // In-memory storage for mock players (since MockPlayerRepository doesn't exist)
-    private Map<String, Player> mockPlayerStore = new ConcurrentHashMap<>();
+
     private Player createPlayer(String tenant, String brand, String playerId, String currency) {
         Player mockPlayer = new Player();
         mockPlayer.setTenant(tenant);
@@ -60,7 +62,8 @@ public class MockPAMController {
         mockPlayer.setUid(playerId + "|" + currency);
         
         // Save to in-memory store
-        mockPlayerStore.put(mockPlayer.getUid(), mockPlayer);
+        mockPlayerRepository.save(mockPlayer);
+
         log.info("Mock mockPlayer {} inserted", mockPlayer);
         
         return mockPlayer;
@@ -78,8 +81,8 @@ public class MockPAMController {
             @RequestHeader(defaultValue = "default") String tenant) {
         
         log.info("{}", request);
-        
-        Player mockPlayer = findPlayerByToken(request.getSessionToken());
+
+        Player mockPlayer = mockPlayerRepository.findByCorrelationId(request.getSessionToken());
         if (mockPlayer == null) {
             throw new BaseRuntimeException(MockPlayerConnectErrorCode.INVALID_TOKEN);
         }
@@ -114,8 +117,9 @@ public class MockPAMController {
             @RequestHeader(required = false, defaultValue = "default") String tenant) {
         
         log.info("{}", request);
-        
-        Player mockPlayer = findPlayerByToken(request.getToken());
+
+        Player mockPlayer = mockPlayerRepository.findByCorrelationId(request.getToken());
+
         if (mockPlayer == null) {
             throw new BaseRuntimeException(MockPlayerConnectErrorCode.INVALID_TOKEN);
         }
@@ -285,7 +289,7 @@ public class MockPAMController {
             
             String launchToken = initSessionResponse.get("launchToken").asText();
 
-            Player player = findPlayerByUid(playerId + "|" + currency);
+            Player player = mockPlayerRepository.findByUid(playerId + "|" + currency);
             if (player == null) {
                 player = createPlayer(tenant, brand, playerId, currency);
             }
@@ -297,7 +301,7 @@ public class MockPAMController {
 
             log.info("Player {} {}", player, gameSession.getPlayer());
 
-            mockPlayerStore.put(player.getUid(), player);
+            mockPlayerRepository.save(player);
             mockPlayerServiceAdapter.playerBalance(gameSession);
 
             return ResponseEntity.ok(initSessionResponse);
@@ -317,19 +321,7 @@ public class MockPAMController {
         gameRoundMockErrors.put(gameRoundId + "|" + currency, errorCode);
         return ResponseEntity.ok().build();
     }
-    
-    // Helper methods
-    private Player findPlayerByToken(String token) {
-        return mockPlayerStore.values().stream()
-                .filter(p -> token.equals(p.getCorrelationId()))
-                .findFirst()
-                .orElse(null);
-    }
-    
-    private Player findPlayerByUid(String uid) {
-        return mockPlayerStore.get(uid);
-    }
-    
+
     private Player findPlayerInRedis(String playerId) {
         HashOperations<String, Object, Object> hashOps = redisTemplate.opsForHash();
         
