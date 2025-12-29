@@ -24,6 +24,5 @@ public interface IPlayerService extends IEntityService<Player> {
 
     public List<Player> findPlayerByTags(String tenant, List<String> playerTags);
 
-    public Player findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(String network, String brand, String correlationId, List<String> tags);
+    public Player findAndUpdatePlayerTagsByCorrelationIdAndNetworkAndBrand(String network, String brand, String correlationId, List<String> tags);
 }
-    

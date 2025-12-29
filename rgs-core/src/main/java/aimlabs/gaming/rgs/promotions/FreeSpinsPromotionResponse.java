@@ -1,4 +1,4 @@
-package aimlabs.gaming.rgs.freespins;
+package aimlabs.gaming.rgs.promotions;
 
 import aimlabs.gaming.rgs.core.entity.Status;
 import lombok.AllArgsConstructor;

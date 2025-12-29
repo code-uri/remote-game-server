@@ -150,7 +150,6 @@ public class GamePlayService {
             //log.info("player transaction auto played {}", autoPlayed);
             gameActivityDBObject.put("autoPlayed", false);
             DBObject  savedGameActivity = gameActivityStore.insertDBObject(gameActivityDBObject);
-            updateGamePlay(gamePlayResponse, gameSession);
         }
         return updateGamePlay(gamePlayResponse, gameSession);
     }

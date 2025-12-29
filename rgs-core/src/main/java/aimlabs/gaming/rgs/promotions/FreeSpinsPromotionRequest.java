@@ -1,8 +1,7 @@
-package aimlabs.gaming.rgs.freespins;
+package aimlabs.gaming.rgs.promotions;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import aimlabs.gaming.rgs.core.entity.Status;
-import aimlabs.gaming.rgs.promotions.PromotionType;
 import lombok.Data;
 
 import java.util.ArrayList;

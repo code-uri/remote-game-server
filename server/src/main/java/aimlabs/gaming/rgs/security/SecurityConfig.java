@@ -155,6 +155,11 @@ public class SecurityConfig {
                     .cors(cors -> configurationSource())
                     .formLogin(AbstractHttpConfigurer::disable)
                     .addFilterAt(new AdminJWTAuthenticationWebFilter(authenticationManager(),
+                            // only attempt admin authentication when Authorization header exists
+                            request -> {
+                                String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+                                return authHeader != null && !authHeader.isEmpty();
+                            },
                             new GameSessionBearerTokenProvider(jwtUtil(jjwt)) {
 
                                 public Authentication getAuthentication(String token) {

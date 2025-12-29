@@ -9,12 +9,13 @@ import aimlabs.gaming.rgs.games.GameSupplierLocator;
 import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.gamesupplier.IGameSupplierService;
-import aimlabs.gaming.rgs.promotions.IPromotionService;
-import aimlabs.gaming.rgs.promotions.Promotion;
+import aimlabs.gaming.rgs.promotions.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RequestBody;
 
+import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -36,60 +37,80 @@ public class AggregatorFreeSpinsPromotionService implements IFreeSpinsPromotionS
     IConnectorService connectorService;
 
     @Override
-    public FreeSpinsPromotionResponse awardBonus(FreeSpinsPromotionRequest request) {
-        try {
+    public FreeSpinsPromotionResponse awardBonus(@RequestBody FreeSpinsPromotionRequest request) {
+
             Promotion promotion = promotionService.award(request);
-            log.info("aggregator promotion created with ref {}", promotion.getId());
-            request.setPromotionRefId(promotion.getPromotionRefId());
+            if(promotion==null){
+                throw new BaseRuntimeException(SystemErrorCode.INVALID_PROMOTION_REFERENCE, "Promotion not found");
+            }
 
-            List<GameSkin> gameSkins = gameSkinService.findAllByUidIn(request.getGames());
+            try {
 
-            // Group by connector
-            Map<String, List<GameSkin>> groupedByConnector = gameSkins.stream()
-                    .collect(Collectors.groupingBy(
-                            gameSkin -> gameSkin.getConnector() != null ? gameSkin.getConnector() : "default"));
+               // log.info("aggregator promotion created with ref {}", promotion.getId());
+                request.setPromotionRefId(promotion.getPromotionRefId());
 
-            // Process each connector group
-            for (Map.Entry<String, List<GameSkin>> entry : groupedByConnector.entrySet()) {
-                List<GameSkin> gameSkinList = entry.getValue();
-                GameSkin gameSkin = gameSkinList.get(0);
-                List<String> gamesList = gameSkinList.stream()
-                        .map(GameSkin::getProviderGame)
+                List<GameSkin> gameSkins = gameSkinService.findAllByUidIn(request.getGames());
+
+                // Group by connector
+                Map<String, List<GameSkin>> groupedByConnector = gameSkins.stream()
+                        .collect(Collectors.groupingBy(
+                                gameSkin -> gameSkin.getConnector() != null ? gameSkin.getConnector() : "default"));
+
+                // Convert groupedByConnector (connectorId -> List<GameSkin>) to a list of pairs (supplier -> aggregated gameList)
+                List<Map.Entry<IGameSupplierPromotionsService, List<String>>> supplierGamePairs = groupedByConnector.entrySet().stream()
+                        .map(entry -> {
+                            String connectorId = entry.getKey();
+                            List<GameSkin> gameSkinList = entry.getValue();
+
+                            List<String> gamesList = gameSkinList.stream()
+                                    .map(GameSkin::getProviderGame)
+                                    .collect(Collectors.toList());
+
+                            IGameSupplierService supplier = gameSupplierLocator.getSupplier(connectorId);
+                            if (!(supplier instanceof IGameSupplierPromotionsService)) {
+                                throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
+                                        "provider not found for " + (gameSkinList.isEmpty() ? connectorId : gameSkinList.get(0).getUid()));
+                            }
+
+                            IGameSupplierPromotionsService promotionsSupplier = (IGameSupplierPromotionsService) supplier;
+                            return new AbstractMap.SimpleEntry<>(promotionsSupplier, gamesList);
+                        })
                         .collect(Collectors.toList());
 
-                request.setPlayer(promotion.getPlayer());
-                request.setBrand(promotion.getBrand());
-                request.setPromotionRefId(promotion.getId());
-                request.setGames(gamesList);
+                // Process each supplier -> games list pair
+                for (Map.Entry<IGameSupplierPromotionsService, List<String>> entry : supplierGamePairs) {
+                    IGameSupplierPromotionsService supplier = entry.getKey();
+                    List<String> gamesList = entry.getValue();
 
-                IGameSupplierService supplier = gameSupplierLocator.getSupplier(gameSkin.getConnector());
-                if (supplier == null) {
-                    throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR,
-                            "provider not found for " + gameSkin.getUid());
+                    // Prepare request for this supplier
+                    request.setPlayer(promotion.getPlayer());
+                    request.setBrand(promotion.getBrand());
+                    request.setPromotionRefId(promotion.getId());
+                    request.setGames(gamesList);
+
+                    supplier.awardBonus(request);
+                    FreeSpinsPromotionResponse response = supplier.getPromotionByRefId(request);
+
+                    if (response == null) {
+                        FreeSpinsPromotionResponse cancelResponse = supplier.cancelBonus(request.getPromotionRefId());
+                        if (cancelResponse == null)
+                            throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Failed to cancel promotion. Request "+ request );
+                    }else{
+                        log.info("Promotion awarded successfully for promotionRefId: {} via supplier", request.getPromotionRefId());
+                    }
                 }
 
-                // Note: IGameSupplierService doesn't have promotion methods
-                // This is a simplified implementation
-                log.info("Processing game skin {} with supplier", gameSkin.getUid());
-            }
-            return new FreeSpinsPromotionResponse(promotion.getId(),
-                    promotion.getPromotionRefId(), promotion.getStatus());
+                return new FreeSpinsPromotionResponse(promotion.getId(),
+                        promotion.getPromotionRefId(), promotion.getStatus());
 
-        } catch (Exception throwable) {
-            log.error("Error in awardBonus", throwable);
-            // Try to clean up the promotion if it was created
-            try {
-                // Note: This assumes promotion was created before the error
-                // You may need to track this more carefully
-            } catch (Exception cleanupError) {
-                log.error("Error during cleanup", cleanupError);
+            } catch (Exception e) {
+                promotion = promotionService.updatePartial(promotion.getId(), Map.of("status", Status.CANCELLED));
+                throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "Promotion Award failed", e);
             }
-            throw throwable;
         }
-    }
 
     @Override
-    public FreeSpinsPromotionResponse cancelBonus(FreeSpinsPromotionRequest freeSpinsPromotionRequest) {
+    public FreeSpinsPromotionResponse cancelBonus(@RequestBody FreeSpinsPromotionRequest freeSpinsPromotionRequest) {
         try {
             Promotion promotion = promotionService.findByPromotionRefId(
                     freeSpinsPromotionRequest.getPromotionRefId());

@@ -5,8 +5,8 @@ import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
 import aimlabs.gaming.rgs.freespins.FreeSpinsAllotment;
 import aimlabs.gaming.rgs.freespins.FreeSpinsAllotmentService;
-import aimlabs.gaming.rgs.freespins.FreeSpinsPromotionRequest;
-import aimlabs.gaming.rgs.freespins.FreeSpinsPromotionResponse;
+import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionRequest;
+import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionResponse;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
 import aimlabs.gaming.rgs.promotions.Promotion;
 import aimlabs.gaming.rgs.promotions.PromotionService;
@@ -14,6 +14,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/games")
@@ -32,6 +34,7 @@ public class GameProviderPromotionsController {
             @RequestHeader("X-Client-Key") String clientKey,
             HttpServletRequest httpServletRequest) {
 
+        log.info("Awarding promotion for clientId: {}", clientId);
         freeSpinsPromotionRequest.setClientId(clientId);
         freeSpinsPromotionRequest.setClientKey(clientKey);
         Promotion promotion = promotionService.award(freeSpinsPromotionRequest);
@@ -57,7 +60,8 @@ public class GameProviderPromotionsController {
         if (promotion == null)
             throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion not found");
 
-        promotion.setStatus(Status.CANCELLED);
+
+        promotion = promotionService.updatePartial(promotion.getId(), Map.of("status", Status.CANCELLED));
         return new FreeSpinsPromotionResponse(promotion.getId(), promotion.getPromotionRefId(), promotion.getStatus());
     }
 

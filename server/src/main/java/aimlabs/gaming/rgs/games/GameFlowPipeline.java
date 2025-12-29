@@ -1,5 +1,6 @@
 package aimlabs.gaming.rgs.games;
 
+import aimlabs.gaming.rgs.freespins.FreeSpinsPromotionGameFlowPipelineHandler;
 import aimlabs.gaming.rgs.streaks.StreakPromotionGameFlowPipelineHandler;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -13,11 +14,14 @@ public class GameFlowPipeline {
     GameFlowPipelineHandler first;
 
     GameFlowPipeline(GamePlayGameFlowPipelineHandler gamePlayHandler,
-            WagerGameFlowPipelineHandler wagerHandler,
-            WinGameFlowPipelineHandler winHandler,
-            StreakPromotionGameFlowPipelineHandler streakPromotionHandler) {
+                     FreeSpinsPromotionGameFlowPipelineHandler freeSpinsPromotionGameFlowPipelineHandler,
+                     StreakPromotionGameFlowPipelineHandler streakPromotionHandler,
+                     WagerGameFlowPipelineHandler wagerHandler,
+                     WinGameFlowPipelineHandler winHandler
+    ) {
         this.first = gamePlayHandler;
-        gamePlayHandler.setNext(streakPromotionHandler);
+        gamePlayHandler.setNext(freeSpinsPromotionGameFlowPipelineHandler);
+        freeSpinsPromotionGameFlowPipelineHandler.setNext(streakPromotionHandler);
         streakPromotionHandler.setNext(wagerHandler);
         wagerHandler.setNext(winHandler);
     }

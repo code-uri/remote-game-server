@@ -1,4 +1,4 @@
-package aimlabs.gaming.rgs.freespins;
+package aimlabs.gaming.rgs.promotions;
 
 
 public interface IFreeSpinsPromotionService {

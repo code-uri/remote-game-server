@@ -1,5 +1,8 @@
 package aimlabs.gaming.rgs.gconnect.provider;
 
+import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionRequest;
+import aimlabs.gaming.rgs.promotions.FreeSpinsPromotionResponse;
+import aimlabs.gaming.rgs.promotions.IGameSupplierPromotionsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import aimlabs.gaming.rgs.brands.Brand;
 import aimlabs.gaming.rgs.gamesessions.GameSession;
@@ -23,6 +26,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.client.RestTemplate;
+
 @Slf4j
 @Getter
 @Service
@@ -59,12 +70,31 @@ public class PhotonGameSupplierFactory implements GameSupplierServiceFactory {
         return new PhotonGameSupplierConnector(connector);
     }
 
-    private class PhotonGameSupplierConnector implements IGameSupplierService {
+    private class PhotonGameSupplierConnector implements IGameSupplierService, IGameSupplierPromotionsService {
         private final Connector connector;
+        private final RestTemplate restTemplate = new RestTemplate();
 
         public PhotonGameSupplierConnector(Connector connector) {
             this.connector = connector;
             log.info("PhotonGameSupplierConnector create {}", connector);
+        }
+
+        private String baseUrl() {
+            // Allow override from connector settings if provided
+            Object override = connector.getSettings().get("promotionsBaseUrl");
+            if (override instanceof String && !((String) override).isBlank())
+                return (String) override;
+            return connector.getBaseUrl();
+        }
+
+        private HttpHeaders authHeaders() {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Object clientId = connector.getSettings().getOrDefault("x-client-id", "default");
+            Object clientKey = connector.getSettings().getOrDefault("x-client-key", "default");
+            headers.set("X-Client-ID", String.valueOf(clientId));
+            headers.set("X-Client-Key", String.valueOf(clientKey));
+            return headers;
         }
 
         @Override
@@ -130,5 +160,33 @@ public class PhotonGameSupplierFactory implements GameSupplierServiceFactory {
         public Connector getConnector() {
                return this.connector;
         }
+
+        // Blocking implementation of promotions API using RestTemplate
+        @Override
+        public FreeSpinsPromotionResponse awardBonus(FreeSpinsPromotionRequest freeSpinsPromotionRequest) {
+            String url = baseUrl() + "/games/promotions/award";
+            HttpEntity<FreeSpinsPromotionRequest> entity = new HttpEntity<>(freeSpinsPromotionRequest, authHeaders());
+            return restTemplate.postForObject(url, entity, FreeSpinsPromotionResponse.class);
+        }
+
+        @Override
+        public FreeSpinsPromotionResponse getPromotionByRefId(FreeSpinsPromotionRequest request) {
+            String url = baseUrl() + "/games/promotions/" + request.getPromotionRefId();
+            HttpEntity<Void> entity = new HttpEntity<>(authHeaders());
+            ResponseEntity<FreeSpinsPromotionResponse> resp = restTemplate.exchange(url, HttpMethod.GET, entity,
+                    FreeSpinsPromotionResponse.class);
+            return resp.getBody();
+        }
+
+        @Override
+        public FreeSpinsPromotionResponse cancelBonus(String promotionRefId) {
+            String url = baseUrl() + "/games/promotions/" + promotionRefId + "/cancel";
+            HttpEntity<Void> entity = new HttpEntity<>(authHeaders());
+            ResponseEntity<FreeSpinsPromotionResponse> resp = restTemplate.exchange(url, HttpMethod.POST, entity,
+                    FreeSpinsPromotionResponse.class);
+            return resp.getBody();
+        }
     }
+
+    // Outer class no longer provides reactive promotion methods; keep the interface in case other code references factory directly
 }

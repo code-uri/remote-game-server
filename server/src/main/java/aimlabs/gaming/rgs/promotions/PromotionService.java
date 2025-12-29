@@ -6,9 +6,7 @@ import aimlabs.gaming.rgs.core.AbstractEntityService;
 import aimlabs.gaming.rgs.core.entity.Status;
 import aimlabs.gaming.rgs.core.exceptions.BaseRuntimeException;
 import aimlabs.gaming.rgs.core.exceptions.SystemErrorCode;
-import aimlabs.gaming.rgs.freespins.FreeSpinsPromotionRequest;
 import aimlabs.gaming.rgs.tenant.TenantContextHolder;
-import aimlabs.gaming.rgs.gameskins.GameSkin;
 import aimlabs.gaming.rgs.gameskins.IGameSkinService;
 import aimlabs.gaming.rgs.networks.INetworkService;
 import aimlabs.gaming.rgs.networks.Network;
@@ -58,7 +56,7 @@ public class PromotionService extends AbstractEntityService<Promotion, Promotion
     }
 
     public Promotion award(FreeSpinsPromotionRequest fspReq) {
-         if(fspReq.getPlayer()==null || CollectionUtils.isEmpty(fspReq.getPlayerTags())){
+         if(fspReq.getPlayer()==null){
             throw new BaseRuntimeException(SystemErrorCode.PLAYER_REQUIRED_IN_REQUEST);
         }
         else if(fspReq.getFreeSpins()==null){
@@ -109,6 +107,7 @@ public class PromotionService extends AbstractEntityService<Promotion, Promotion
         if (games.isEmpty()) {
             throw new BaseRuntimeException(SystemErrorCode.INTERNAL_ERROR, "game not found.");
         }
+
         //Brand brand = gamesAndBrand.getT2();
 
         promotion = new Promotion();
@@ -125,11 +124,9 @@ public class PromotionService extends AbstractEntityService<Promotion, Promotion
         promotion.setBrand(fspReq.getBrand());
         promotion.setNetwork(network.getUid());
         promotion.setPlayer(player.getUid());
-        Promotion promotion1 = findByNetworkAndPromotionRefId(promotion.getPlayer(), promotion.getPromotionRefId());
+        promotion = create(promotion);
 
-        if(promotion1==null)
-            promotion = create(promotion);
-
+        log.info("Awarded promotion {} to player {} with {} free spins", promotion.getPromotionRefId(), player.getUid(), promotion.getFreeSpins());
         return promotion;
     }
 

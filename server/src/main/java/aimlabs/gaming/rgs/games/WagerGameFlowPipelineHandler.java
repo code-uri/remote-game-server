@@ -52,6 +52,10 @@ public class WagerGameFlowPipelineHandler implements GameFlowPipelineHandler {
         } else {
             handleExistingRound(gamePlayResponse, gameSession, player);
         }
+
+        if (nextHandler != null) {
+            nextHandler.handle(request, gamePlayContext);
+        }
     }
 
     @Override

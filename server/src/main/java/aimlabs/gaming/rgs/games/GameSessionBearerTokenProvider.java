@@ -86,7 +86,14 @@ public class GameSessionBearerTokenProvider implements AuthenticationConverter {
 
     @Override
     public Authentication convert(HttpServletRequest request) {
-        String token = isolateBearerValue.apply(getTokenFromRequest(request));
+        // Defensive: don't attempt to extract bearer value if header missing or malformed
+        String authorization = getTokenFromRequest(request);
+        if (!StringUtils.hasText(authorization) || !authorization.startsWith(BEARER) || !matchBearerLength.test(authorization)) {
+            // Returning null signals that no authentication should be attempted for this request
+            return null;
+        }
+
+        String token = isolateBearerValue.apply(authorization);
 
         return getAuthentication(token);
     }

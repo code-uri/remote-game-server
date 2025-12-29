@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import lombok.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -56,7 +55,6 @@ import aimlabs.gaming.rgs.players.PlayerService;
 import aimlabs.gaming.rgs.settings.GameSettingsService;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
-import redis.clients.jedis.resps.Tuple;
 
 @Data
 @Slf4j
@@ -115,8 +113,8 @@ public class GameRequestHandler implements IGameLaunchService{
 
         Player player;
         if (!launchRequest.isDemo() && launchRequest.getPlayer() != null) {
-            player = playerService.findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(brandGame.brand().getNetwork(), brandGame.brand().getUid(),
-                    launchRequest.getPlayer() == null ? launchRequest.getToken() : launchRequest.getPlayer(), null);
+            player = playerService.findAndUpdatePlayerTagsByCorrelationIdAndNetworkAndBrand(brandGame.brand().getNetwork(), brandGame.brand().getUid(),
+                   launchRequest.getPlayer(), null);
         } else {
             player = new Player();
             player.setUid(launchRequest.getToken());
@@ -292,10 +290,16 @@ public class GameRequestHandler implements IGameLaunchService{
         gamePlayContext.setGameSkin(brandGame.game());
         gamePlayContext.setGamePlayRequest(requestJsonNode);
 
-        gameFlowPipeline.handle(requestJsonNode, gamePlayContext);
-
-        JsonNode asd = composeGameResponse(gamePlayContext.getEngineResponse());
-        return asd;
+        try {
+            gameFlowPipeline.handle(requestJsonNode, gamePlayContext);
+        } catch (RuntimeException e) {
+            if(e instanceof BaseRuntimeException  bre && bre.getErrorCode()==SystemErrorCode.COM_ERROR) {
+                log.error("Game play processing failed for gameSession {}: {}",
+                        gameSession.getUid(), bre.getMessage());
+            }
+            throw new RuntimeException(e);
+        }
+        return composeGameResponse(gamePlayContext.getEngineResponse());
     }
 
     private void preChecks(GameSession gameSession, GameSkin gameSkin, JsonNode requestJsonNode,

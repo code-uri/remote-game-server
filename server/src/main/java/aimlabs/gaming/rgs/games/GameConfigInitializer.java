@@ -59,7 +59,7 @@ public class GameConfigInitializer implements GameInitializer {
 
         ArrayNode unfinishedGames = objectMapper.createArrayNode();
         boolean unfinishedGamesSupported = GameSettingsService.isUnfinishedGamesSupported(settings);
-        
+        log.info("Unfinished games supported: {}", unfinishedGamesSupported);
         if (unfinishedGamesSupported) {
             boolean confirmHandSupported = GameSettingsService.isConfirmHandSupportedFromMap(settings);
             unfinishedGames = findUnfinishedGames(gameSession, gameSkin, confirmHandSupported);
@@ -82,7 +82,7 @@ public class GameConfigInitializer implements GameInitializer {
                 gameSession.getTenant(), 
                 gameSession.getCurrency()
             );
-            
+            log.info("Found unfinished game: {}", unfinishedGame != null ? unfinishedGame.getGameRound().getUid() : "none");
             if (unfinishedGame != null && unfinishedGame.getGameRound() != null) {
                 GameRound gameRound = unfinishedGame.getGameRound();
                 

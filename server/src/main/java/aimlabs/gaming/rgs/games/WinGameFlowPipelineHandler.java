@@ -16,6 +16,7 @@ import aimlabs.gaming.rgs.transactions.TransactionService;
 import aimlabs.gaming.rgs.transactions.TransactionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.javamoney.moneta.Money;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ import java.util.Map;
 import static aimlabs.gaming.rgs.settings.GameSettingsService.isConfirmHandSupported;
 import static aimlabs.gaming.rgs.transactions.TransactionType.CREDIT;
 
+@Slf4j
 @Component
 public class WinGameFlowPipelineHandler implements GameFlowPipelineHandler {
 
@@ -54,9 +56,9 @@ public class WinGameFlowPipelineHandler implements GameFlowPipelineHandler {
 
         GameRound gameRound = gamePlayResponse.getGameRound();
 
-        // log.info("update game round with status {}, isRoundCompleted {}",
-        // gameRound.getStatus(), gamePlayResponse.isRoundCompleted());
-        // gameRound.setGamePlay(gamePlayResponse.getGamePlay().get("uid").asText());
+         log.info("update game round with status {}, isRoundCompleted {}",
+         gameRound.getStatus(), gamePlayResponse.isRoundCompleted());
+         gameRound.setGamePlay(gamePlayResponse.getGamePlay().get("uid").asText());
 
         // noinspection RedundantIfStatement
         if (isConfirmHandSupported(settingsJsonNode))
@@ -98,6 +100,7 @@ public class WinGameFlowPipelineHandler implements GameFlowPipelineHandler {
         // credit.add(gameRound.getJackpotDetails().getTotalJackpotWinningsInPlayerCurrency());
         // }
 
+        log.info("Processing win transaction for gameRound: {}, credit: {}", gameRound.getUid(), credit);
         try {
 
             Transaction transaction = null;
@@ -161,7 +164,8 @@ public class WinGameFlowPipelineHandler implements GameFlowPipelineHandler {
 
         processGameRound(gamePlayResponse, gameSession, gameSkin, player, settingsJsonNode);
 
-        this.nextHandler.handle(request, gamePlayContext);
+        if(this.nextHandler!=null)
+            this.nextHandler.handle(request, gamePlayContext);
 
     }
 

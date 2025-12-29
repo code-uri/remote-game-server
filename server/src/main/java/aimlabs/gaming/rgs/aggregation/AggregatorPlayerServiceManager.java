@@ -115,7 +115,15 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
                 throw new BaseRuntimeException(SystemErrorCode.INVALID_GAME_ROUND);
 
             Player player = playerService.findOneByUid(gameRound.getPlayer());
-            GameSession gameSession = gameSessionService.findOneByUid(request.getToken());
+
+            GameSession gameSession = null;
+            if(request.getToken()!=null){
+                log.info("Validating token from request {}", request.getToken());
+                gameSession = gameSessionService.findOneByUid(request.getToken());
+            }else{
+                log.info("No token found in request, using game round session token {}", gameRound.getSession());
+                gameSession = gameSessionService.findOneByUid(gameRound.getSession());
+            }
 
             if (gameSession == null) {
                 throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
@@ -132,6 +140,10 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
         } else {
             //handle DEBIT and DEBIT_CREDIT request.
             //validate token case.
+            if(request.getToken()==null) {
+                log.info("No token found in request");
+                throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+            }
             GameSession gameSession = gameSessionService.findOneByUid(request.getToken());
 
             if (gameSession == null)
@@ -206,9 +218,9 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
 
             Player player = playerService.findOneByUid(gameSession.getPlayer());
 
-            PlayerInfo playerInfo = playerService.initialise(player.getNetwork(),
+            PlayerInfo playerInfo = playerService.initialise(gameSession.getNetwork(),
                     gameSession.getToken(),
-                    player.getCorrelationId(),
+                    player!=null? player.getCorrelationId() : null,
                     gameSession.getCurrency(),
                     gameSession.getBrand(),
                     gameSession.getGame(),
@@ -254,8 +266,11 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
     public Wallet playerBalance(PlayerBalanceRequest request) {
 
         GameSession gameSession = gameSessionService.findOneByUid(request.getToken());
-
-        return PlayerWalletUtils.asWallet(getPlayerWallet(gameSession));
+        if(gameSession == null)
+            throw new BaseRuntimeException(SystemErrorCode.TOKEN_INVALID);
+        return ScopedValue.where(GameSessionContext.GAME_SESSION, gameSession).call(() -> {
+            return PlayerWalletUtils.asWallet(getPlayerWallet(gameSession));
+        });
     }
 
     @Override
@@ -290,7 +305,7 @@ public class AggregatorPlayerServiceManager implements PlayerAccountManager {
 
     public PlayerWallet getPlayerWallet(GameSession gameSession) {
         Player player = playerService.findOneByUid(gameSession.getPlayer());
-        return  playerService.getBalance(gameSession, player.getCorrelationId());
+        return  playerService.getBalance(gameSession, player!=null ? player.getCorrelationId() : null);
     }
 
 

@@ -83,6 +83,7 @@ public class GameProviderGamePlayController {
                         @RequestBody JsonNode request,
                         HttpServletRequest httpServletRequest) {
 
+                log.info("Received play game request {} for game-session: {} ", request, gameSession.getUid());
                 return ResponseEntity.ok()
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                                 .body(ScopedValue.where(
@@ -95,7 +96,7 @@ public class GameProviderGamePlayController {
         public void confirmHand(GameSession gameSession,
                         @PathVariable(name = "uid") String uid,
                         HttpServletRequest httpServletRequest) {
-
+                log.info("Received confirm hand request for game-round: {} ", uid);
                 GameRound gameRound = ScopedValue.where(
                                 GameSessionContext.GAME_SESSION, gameSession)
                                 .call(() -> gameRoundService.confirmHand(uid));

@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -27,7 +29,7 @@ import java.util.Map;
 @Service
 @Order
 @Slf4j
-public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, GameInitializer {
+public class FreeSpinsPromotionGameFlowPipelineHandler implements GameFlowPipelineHandler, GameInitializer {
 
     static final Duration LOCK_DURATION = Duration.ofSeconds(10);
 
@@ -135,7 +137,7 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
                 objectMapper.createObjectNode().set(key, objectMapper.valueToTree(promoBonus)));
     }
 
-    private void processFreeSpinsAllotment(GamePlayResponse gamePlayResponse, String freeSpinsAllotmentId,
+    private FreeSpinsAllotment processFreeSpinsAllotment(GamePlayResponse gamePlayResponse, String freeSpinsAllotmentId,
             GameSession gameSession,
             GamePlayContext ctx) {
         FreeSpinsAllotment freeSpinsAllotment = freeSpinsIssueStore.findOneByIdAndPlayerAndGame(freeSpinsAllotmentId,
@@ -155,13 +157,7 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
         gamePlayResponse.setTotalWager(0);
         ctx.getEngineResponse().setTotalWager(0);
 
-        if (this.nextHandler != null)
-            this.nextHandler.handle(ctx.getGamePlayRequest(), ctx);
-
-        consumeFreeSpin(gamePlayResponse,
-                freeSpinsAllotment.getId(),
-                gameSession.getPlayer(),
-                gameSession.getGame());
+        return freeSpinsAllotment;
     }
 
     private void validateAndLockFreeSpins(GamePlayResponse gamePlayResponse,
@@ -205,11 +201,10 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
                 gamePlayResponse.getTotalWinnings(),
                 gamePlayResponse.isContinueRound());
 
-        Object as = redisTemplate.opsForValue().getAndDelete(player + "-" + gameId);
+        Boolean deleted = redisTemplate.delete(player + "-" + gameId);
 
-        if (as != null) {
+        if (deleted) {
             // TODO fix this
-            // gamePlayResponse.setFreeSpinsAllotment(freeSpinsAllotment);
             gamePlayResponse.getGameRound()
                     .setPromoBonus(createPromoBonus(freeSpinsAllotment));
             log.info("Removed lock on freespin issue id {} and game {}",
@@ -223,6 +218,8 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
         GameSession gameSession = ctx.getGameSession();
         GameRound gameRound = ctx.getEngineResponse().getGameRound();
         log.info("{} ", ctx.getGamePlayRequest().has("freeSpinsAllotmentId"));
+
+        FreeSpinsAllotment freeSpinsAllotment = null;
         if (ctx.getGamePlayRequest().has("freeSpinsAllotmentId")
                 || (gameRound != null && gameRound.getFreeSpinsAllotmentId() != null)) {
 
@@ -232,11 +229,17 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
             else
                 freeSpinsAllotmentId = ctx.getEngineResponse().getGameRound().getFreeSpinsAllotmentId();
             log.info("{}", freeSpinsAllotmentId);
+            freeSpinsAllotment =  processFreeSpinsAllotment(gamePlayResponse, freeSpinsAllotmentId, gameSession, ctx);
+        }
 
-            processFreeSpinsAllotment(gamePlayResponse, freeSpinsAllotmentId, gameSession, ctx);
-        } else {
-            if (this.nextHandler != null)
-                this.nextHandler.handle(request, ctx);
+        if (this.nextHandler != null)
+            this.nextHandler.handle(request, ctx);
+
+        if(freeSpinsAllotment!=null){
+            consumeFreeSpin(gamePlayResponse,
+                    freeSpinsAllotment.getId(),
+                    gameSession.getPlayer(),
+                    gameSession.getGame());
         }
     }
 
@@ -247,11 +250,10 @@ public class FreeSpinsPromotionGameHandler implements GameFlowPipelineHandler, G
 
     @Override
     public JsonNode loadData(GameSession gameSession, GameSkin gameSkin, Map<String, Object> settings) {
-
-
         if (gameSession.isDemo())
             return null;
         ObjectNode promotionResponse = objectMapper.createObjectNode();
         return loadDate(promotionResponse, gameSkin, gameSession, settings);
     }
+
 }

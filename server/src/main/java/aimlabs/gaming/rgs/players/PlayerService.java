@@ -154,7 +154,7 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
                 String correlationId = (playerInfo.getPlayer() != null ? playerInfo.getPlayer()
                         : playerInfo.getExternalToken());
 
-                Player player = findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(network, brand, correlationId,
+                Player player = findAndUpdatePlayerTagsByCorrelationIdAndNetworkAndBrand(network, brand, correlationId,
                         playerInfo.getTags());
 
                 playerInfo.setUid(player.getUid());
@@ -192,8 +192,8 @@ public class PlayerService extends AbstractEntityService<Player, PlayerDocument>
                 .stream().map(e -> getMapper().asDto(e)).toList();
     }
 
-    public Player findAndUpdatePlayerTagsByCorrelationidAndNetworkAndBrand(String network, String brand,
-            String correlationId, List<String> tags) {
+    public Player findAndUpdatePlayerTagsByCorrelationIdAndNetworkAndBrand(String network, String brand,
+                                                                           String correlationId, List<String> tags) {
         Player player = new Player();
         player.setNetwork(network);
         player.setBrand(brand);
