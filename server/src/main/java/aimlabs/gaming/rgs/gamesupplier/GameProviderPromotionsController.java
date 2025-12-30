@@ -52,18 +52,6 @@ public class GameProviderPromotionsController {
         return new FreeSpinsPromotionResponse(promotion.getId(), promotion.getPromotionRefId(), promotion.getStatus());
     }
 
-    @DeleteMapping("/promotions/{promotionRefId}")
-    public FreeSpinsPromotionResponse cancelPromotion(@PathVariable String promotionRefId,
-            HttpServletRequest httpServletRequest) {
-
-        Promotion promotion = promotionService.findByPromotionRefId(promotionRefId);
-        if (promotion == null)
-            throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion not found");
-
-
-        promotion = promotionService.updatePartial(promotion.getId(), Map.of("status", Status.CANCELLED));
-        return new FreeSpinsPromotionResponse(promotion.getId(), promotion.getPromotionRefId(), promotion.getStatus());
-    }
 
     @GetMapping("/promotions/{id}/claim")
     public FreeSpinsAllotment claimPromotion(@PathVariable(name = "id") String promotionId,
@@ -72,6 +60,19 @@ public class GameProviderPromotionsController {
         // String ipaddress = getRemoteIPAddress(serverHttpRequest);
 
         return freeSpinsIssueService.claimFreeSpin(promotionId, gameSession);
+    }
+
+    @GetMapping("/promotions/{id}/cancel")
+    public FreeSpinsPromotionResponse cancelPromotion(@PathVariable(name = "id") String promotionId,
+                                             GameSession gameSession,
+                                             HttpServletRequest httpServletRequest) {
+        // String ipaddress = getRemoteIPAddress(serverHttpRequest);
+
+        Promotion promotion = promotionService.updatePartial(promotionId, Map.of("status", Status.CANCELLED));
+        if(promotion==null){
+            throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST, "Promotion not found");
+        }
+        return new FreeSpinsPromotionResponse(promotion.getId(), promotion.getPromotionRefId(), promotion.getStatus());
     }
 
 }

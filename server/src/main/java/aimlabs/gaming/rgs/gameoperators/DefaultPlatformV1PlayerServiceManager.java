@@ -40,12 +40,9 @@ public class DefaultPlatformV1PlayerServiceManager implements PlayerAccountManag
     @Autowired
     private ObjectMapper objectMapper;
 
-    private final RestClient restClient;
-
     @Autowired
-    public DefaultPlatformV1PlayerServiceManager(RestClient restClient) {
-        this.restClient = restClient;
-    }
+    private RestClient.Builder restClientBuilder;
+
 
     @Override
     public boolean supports(Connector connector) {
@@ -61,23 +58,20 @@ public class DefaultPlatformV1PlayerServiceManager implements PlayerAccountManag
     class PlayerServiceConnector implements PlayerAccountManager {
 
         private final Connector connector;
+        private final RestClient restClient;
 
         PlayerServiceConnector(Connector connector) {
             this.connector = connector;
+            this.restClient = restClientBuilder.baseUrl(connector.getBaseUrl()).build();
         }
 
-        private String buildUrl(String path) {
-            // adapt if connector stores URL differently
-            return connector.getBaseUrl() + path;
-        }
 
         private <TReq, TRes> TRes postForObject(String path, TReq body, Class<TRes> responseType) {
             long startMillis = System.currentTimeMillis();
-            String url = buildUrl(path);
 
             try {
                 TRes result = restClient.post()
-                        .uri(url)
+                        .uri(path)
                         .body(body)
                         .retrieve()
                         .body(responseType);

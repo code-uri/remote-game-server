@@ -301,7 +301,7 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
 
     private final class BFGamesPlayerAccountManager implements PlayerAccountManager {
         private final Connector connector;
-        private final RestClient client;
+        private final RestClient restClient;
 
         private BFGamesPlayerAccountManager(Connector connector) {
             this.connector = Objects.requireNonNull(connector, "connector");
@@ -309,7 +309,7 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
                 throw new BaseRuntimeException(SystemErrorCode.INVALID_REQUEST,
                         "bf-games connector baseUrl is missing");
             }
-            this.client = restClientBuilder.baseUrl(connector.getBaseUrl()).build();
+            this.restClient = restClientBuilder.baseUrl(connector.getBaseUrl()).build();
         }
 
         @Override
@@ -588,7 +588,7 @@ public class BFGamesPlayerServiceAdaptor implements PlayerAccountManagerFactory 
         }
 
         private GenericResponse post(GenericRequest request) {
-            GenericResponse response = client
+            GenericResponse response = restClient
                     .post()
                     .uri("/")
                     .contentType(MediaType.APPLICATION_JSON)

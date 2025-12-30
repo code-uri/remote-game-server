@@ -14,7 +14,8 @@ public class RemoteGameServerLocalServer extends AbstractGamesTest {
                 .properties("debug=false",
                         "spring.data.mongodb.uri=" + mongoUrl,
                         "spring.data.redis.port=" + redisFirstMappedPort,
-                        "server.servlet.context-path=/api/rgs")
+                        "server.servlet.context-path=/api/rgs",
+                        "logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %replace(%msg){'[\\n\\r]', ''}%n")
                 .run(args);
         /*Arrays.stream(Path.of("server/src/test/resources/mongo").toFile().listFiles())
                 .sequential().forEachOrdered(file -> {

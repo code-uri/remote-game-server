@@ -52,6 +52,7 @@ configurations.all {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
     //implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -117,6 +118,7 @@ dependencies {
     testImplementation("org.testcontainers:mongodb:1.20.3")
 
 
+    implementation("io.micrometer:micrometer-tracing-bridge-otel") // Log correlation + tracing context (no export)
 }
 
 tasks.named('test') {
@@ -149,14 +151,13 @@ tasks.register('runLocalTestServer', JavaExec) {
 
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'aimlabs.gaming.rgs.RemoteGameServerLocalServer'
-
     // Forward any args: ./gradlew :server:runLocalTestServer --args="--spring.profiles.active=..."
 }
 
 // workaround https://github.com/GoogleContainerTools/jib/issues/3132
-    tasks.matching { it.name in ['jibDockerBuild', 'jibBuildTar', 'jib'] }.configureEach {
-            notCompatibleWithConfigurationCache("Jib is not compatible with configuration cache")
-    }
+tasks.matching { it.name in ['jibDockerBuild', 'jibBuildTar', 'jib'] }.configureEach {
+    notCompatibleWithConfigurationCache("Jib is not compatible with configuration cache")
+}
 
 
 
@@ -189,26 +190,26 @@ jib {
         labels = ['org.opencontainers.image.source': "https://github.com/${orgName}/${project.getRootProject().name}"]
     }
 
-     extraDirectories {
-         paths {
-             path {
-                 // copies the contents of 'src/main/extra-dir' into '/' on the container
-                 from = file('build/libs/engines')
-                 into = '/workspace/engines'
-             }
-             path {
-                 // copies the contents of 'src/main/another/dir' into '/extras' on the container
-                 from = file("docker/htcheck")
-                 into = '/workspace/utils'
-             }
-         }
+    extraDirectories {
+        paths {
+            path {
+                // copies the contents of 'src/main/extra-dir' into '/' on the container
+                from = file('build/libs/engines')
+                into = '/workspace/engines'
+            }
+            path {
+                // copies the contents of 'src/main/another/dir' into '/extras' on the container
+                from = file("docker/htcheck")
+                into = '/workspace/utils'
+            }
+        }
 
-         permissions = [
-                 '/workspace/utils/htcheck': '777',  // Read/write/execute for owner, read/execute for group/other
-                 //'/path/to/another/file': '644',  // Read/write for owner, read-only for group/other
-                 //'/glob/pattern/**/*.sh': 755
-         ]
-     }
+        permissions = [
+                '/workspace/utils/htcheck': '777',  // Read/write/execute for owner, read/execute for group/other
+                //'/path/to/another/file': '644',  // Read/write for owner, read-only for group/other
+                //'/glob/pattern/**/*.sh': 755
+        ]
+    }
 }
 
 

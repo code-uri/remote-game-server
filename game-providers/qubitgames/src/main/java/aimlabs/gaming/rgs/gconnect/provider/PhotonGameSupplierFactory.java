@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriUtils;
 
 import java.util.Map;
@@ -50,6 +51,11 @@ public class PhotonGameSupplierFactory implements GameSupplierServiceFactory {
 
     @Autowired
     ObjectMapper objectMapper;
+
+
+    @Autowired
+    RestClient.Builder restClientBuilder;
+
     /*
      * @Autowired
      * GravitonGameSupplier gravitonGameSupplier;
@@ -72,20 +78,26 @@ public class PhotonGameSupplierFactory implements GameSupplierServiceFactory {
 
     private class PhotonGameSupplierConnector implements IGameSupplierService, IGameSupplierPromotionsService {
         private final Connector connector;
-        private final RestTemplate restTemplate = new RestTemplate();
+        private final RestClient restClient;
 
         public PhotonGameSupplierConnector(Connector connector) {
             this.connector = connector;
+            Object clientId = connector.getSettings().getOrDefault("x-client-id", "default");
+            Object clientKey = connector.getSettings().getOrDefault("x-client-key", "default");
+            this.restClient = restClientBuilder.baseUrl(connector.getBaseUrl())
+                    .defaultHeader("X-Client-ID", String.valueOf(clientId))
+                    .defaultHeader("X-Client-Key", String.valueOf(String.valueOf(clientKey)))
+                    .build();
             log.info("PhotonGameSupplierConnector create {}", connector);
         }
 
-        private String baseUrl() {
-            // Allow override from connector settings if provided
-            Object override = connector.getSettings().get("promotionsBaseUrl");
-            if (override instanceof String && !((String) override).isBlank())
-                return (String) override;
-            return connector.getBaseUrl();
-        }
+//        private String baseUrl() {
+//            // Allow override from connector settings if provided
+//            Object override = connector.getSettings().get("promotionsBaseUrl");
+//            if (override instanceof String && !((String) override).isBlank())
+//                return (String) override;
+//            return connector.getBaseUrl();
+//        }
 
         private HttpHeaders authHeaders() {
             HttpHeaders headers = new HttpHeaders();
@@ -164,29 +176,33 @@ public class PhotonGameSupplierFactory implements GameSupplierServiceFactory {
         // Blocking implementation of promotions API using RestTemplate
         @Override
         public FreeSpinsPromotionResponse awardBonus(FreeSpinsPromotionRequest freeSpinsPromotionRequest) {
-            String url = baseUrl() + "/games/promotions/award";
-            HttpEntity<FreeSpinsPromotionRequest> entity = new HttpEntity<>(freeSpinsPromotionRequest, authHeaders());
-            return restTemplate.postForObject(url, entity, FreeSpinsPromotionResponse.class);
+            String url = "/games/promotions/award";
+            return restClient.post()
+                    .uri(url)
+                    .headers(httpHeaders -> authHeaders())
+                    .body(freeSpinsPromotionRequest)
+                    .retrieve()
+                    .body(FreeSpinsPromotionResponse.class);
         }
 
         @Override
         public FreeSpinsPromotionResponse getPromotionByRefId(FreeSpinsPromotionRequest request) {
-            String url = baseUrl() + "/games/promotions/" + request.getPromotionRefId();
-            HttpEntity<Void> entity = new HttpEntity<>(authHeaders());
-            ResponseEntity<FreeSpinsPromotionResponse> resp = restTemplate.exchange(url, HttpMethod.GET, entity,
-                    FreeSpinsPromotionResponse.class);
-            return resp.getBody();
+            String url = "/games/promotions/" + request.getPromotionRefId();
+            return restClient.get()
+                    .uri(url)
+                    .headers(httpHeaders -> authHeaders())
+                    .retrieve()
+                    .body(FreeSpinsPromotionResponse.class);
         }
 
         @Override
         public FreeSpinsPromotionResponse cancelBonus(String promotionRefId) {
-            String url = baseUrl() + "/games/promotions/" + promotionRefId + "/cancel";
-            HttpEntity<Void> entity = new HttpEntity<>(authHeaders());
-            ResponseEntity<FreeSpinsPromotionResponse> resp = restTemplate.exchange(url, HttpMethod.POST, entity,
-                    FreeSpinsPromotionResponse.class);
-            return resp.getBody();
+            String url = "/games/promotions/" + promotionRefId + "/cancel";
+            return restClient.get()
+                    .uri(url)
+                    .headers(httpHeaders -> authHeaders())
+                    .retrieve()
+                    .body(FreeSpinsPromotionResponse.class);
         }
     }
-
-    // Outer class no longer provides reactive promotion methods; keep the interface in case other code references factory directly
 }

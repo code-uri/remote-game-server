@@ -48,12 +48,9 @@ public class MockPAMController {
     @Autowired
     RedisTemplate<String, String> redisTemplate;
 
-    @Autowired
-    RestClient restClient;
-
     private AtomicInteger readTimeOut = new AtomicInteger(3);
     private ConcurrentHashMap<String, String> gameRoundMockErrors = new ConcurrentHashMap<>();
-    
+
 
     private Player createPlayer(String tenant, String brand, String playerId, String currency) {
         Player mockPlayer = new Player();
@@ -276,7 +273,7 @@ public class MockPAMController {
         String url = remoteHost + basPath + "/games/init-session";
 
         try {
-            ObjectNode initSessionResponse = restClient.post()
+            ObjectNode initSessionResponse = RestClient.builder().build().post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)

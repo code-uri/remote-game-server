@@ -33,7 +33,7 @@ public class DefaultPlatformPlayerServiceManager implements PlayerAccountManager
     private ObjectMapper objectMapper;
 
     @Autowired
-    private RestClient restClient;
+    private RestClient.Builder restClientBuilder;
 
     @Override
     public boolean supports(Connector connector) {
@@ -49,17 +49,20 @@ public class DefaultPlatformPlayerServiceManager implements PlayerAccountManager
     class PlayerServiceConnector implements PlayerAccountManager {
 
         private final Connector connector;
+        private final RestClient restClient;
 
         PlayerServiceConnector(Connector connector) {
             this.connector = connector;
+            this.restClient = restClientBuilder
+                    .baseUrl(connector.getBaseUrl())
+                    .build();
         }
 
         private <TReq, TRes> TRes postForObject(String path, TReq body, Class<TRes> responseType) {
             long startMillis = System.currentTimeMillis();
-            String url = buildUrl(path);
             try {
                 TRes response = restClient.post()
-                        .uri(url)
+                        .uri(path)
                         .body(body)
                         .retrieve()
                         .body(responseType);
@@ -206,10 +209,6 @@ public class DefaultPlatformPlayerServiceManager implements PlayerAccountManager
                         playerTransactionRequest.getTxnId(), e);
                 throw e;
             }
-        }
-
-        private String buildUrl(String path) {
-            return connector.getBaseUrl() + path;
         }
     }
 }

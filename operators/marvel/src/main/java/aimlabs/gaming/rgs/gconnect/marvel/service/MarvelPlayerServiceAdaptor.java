@@ -59,7 +59,7 @@ public class MarvelPlayerServiceAdaptor
     ObjectMapper objectMapper;
 
     @Autowired
-    private RestClient restClient;
+    private RestClient.Builder restClientBuilder;
 
     public boolean supports(Connector connector) {
         return connectorUid.equals(connector.getUid())
@@ -100,40 +100,15 @@ public class MarvelPlayerServiceAdaptor
     class MarvelPlayerServiceConnector implements PlayerAccountManager {
 
         private final Connector connector;
+        private final RestClient restClient;
 
         MarvelPlayerServiceConnector(Connector connector) {
             this.connector = connector;
+            this.restClient = restClientBuilder
+                    .baseUrl(connector.getBaseUrl())
+                    .build();
         }
 
-        private String getSettingAsString(String key) {
-            Object v = connector != null && connector.getSettings() != null ? connector.getSettings().get(key) : null;
-            return v != null ? v.toString() : null;
-        }
-
-        private String getBaseUrl() {
-            String v = connector != null ? connector.getBaseUrl() : null;
-            if (v == null || v.isBlank()) {
-                v = getSettingAsString("baseUrl");
-            }
-            if (v == null || v.isBlank()) {
-                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR, "Missing marvel baseUrl");
-            }
-            return v;
-        }
-
-        private String buildUrl(String path) {
-            String root = getBaseUrl();
-            if (path == null || path.isBlank() || "/".equals(path)) {
-                return root;
-            }
-            if (root.endsWith("/") && path.startsWith("/")) {
-                return root.substring(0, root.length() - 1) + path;
-            }
-            if (!root.endsWith("/") && !path.startsWith("/")) {
-                return root + "/" + path;
-            }
-            return root + path;
-        }
 
         private int getMaxRetries() {
             try {
@@ -179,11 +154,10 @@ public class MarvelPlayerServiceAdaptor
         }
 
         private <TReq, TRes> TRes postForObject(String path, TReq body, Class<TRes> responseType) {
-            String url = buildUrl(path);
             try {
                 String response = restClient
                         .post()
-                        .uri(url)
+                        .uri(path)
                         .contentType(MediaType.APPLICATION_JSON)
                         .accept(MediaType.APPLICATION_JSON)
                         .body(body)

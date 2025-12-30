@@ -65,7 +65,7 @@ public class ParimatchPlayerServiceAdaptor
     private String transactionRetries;
 
     @Autowired
-    private RestClient restClient;
+    private RestClient.Builder restClientBuilder;
 
     @Override
     public boolean supports(Connector connector) {
@@ -81,9 +81,13 @@ public class ParimatchPlayerServiceAdaptor
     class PlayerServiceConnector implements PlayerAccountManager {
 
         private final Connector connector;
+        private final RestClient restClient;
 
         PlayerServiceConnector(Connector connector) {
             this.connector = connector;
+            this.restClient = restClientBuilder.baseUrl(connector.getBaseUrl())
+                    .defaultHeader( "X-Hub-Consumer", getXHubConsumer())
+                    .build();
         }
 
         private String getSettingAsString(String key) {
@@ -104,42 +108,14 @@ public class ParimatchPlayerServiceAdaptor
             return (v != null && !v.isBlank()) ? v : ParimatchPlayerServiceAdaptor.this.xHubConsumer;
         }
 
-        private String getBaseUrl() {
-            String v = connector != null ? connector.getBaseUrl() : null;
-            if (v == null || v.isBlank()) {
-                v = getSettingAsString("baseUrl");
-            }
-            if (v == null || v.isBlank()) {
-                v = ParimatchPlayerServiceAdaptor.this.baseUrl;
-            }
-            return v;
-        }
-
-        private String buildUrl(String path) {
-            String root = getBaseUrl();
-            if (root == null || root.isBlank()) {
-                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR, "Missing parimatch baseUrl");
-            }
-            if (root.endsWith("/")) {
-                root = root.substring(0, root.length() - 1);
-            }
-            String p = (path == null || path.isBlank()) ? "/" : path;
-            if (!p.startsWith("/")) {
-                p = "/" + p;
-            }
-            return root + p;
-        }
-
         private <TReq, TRes> TRes postForObject(String path, TReq body, Class<TRes> responseType) {
             long startMillis = System.currentTimeMillis();
-            String url = buildUrl(path);
             try {
                 TRes response = restClient
                         .post()
-                        .uri(url)
+                        .uri(path)
                         .contentType(MediaType.APPLICATION_JSON)
                         .accept(MediaType.APPLICATION_JSON)
-                        .header("X-Hub-Consumer", getXHubConsumer())
                         .body(body)
                         .retrieve()
                         .body(responseType);

@@ -57,7 +57,7 @@ public class ReevoPlayerServiceAdaptor
     private String transactionRetries;
 
     @Autowired
-    private RestClient restClient;
+    private RestClient.Builder restClientBuilder;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -110,6 +110,8 @@ public class ReevoPlayerServiceAdaptor
 
     class ReevoPlayerServiceConnector implements PlayerAccountManager {
 
+        private final RestClient restClient;
+
         private static final class RetryableException extends RuntimeException {
             private RetryableException(String message) {
                 super(message);
@@ -124,6 +126,9 @@ public class ReevoPlayerServiceAdaptor
 
         ReevoPlayerServiceConnector(Connector connector) {
             this.connector = connector;
+            this.restClient = restClientBuilder
+                    .baseUrl(connector.getBaseUrl())
+                    .build();
         }
 
         private String getSettingAsString(String key) {
@@ -210,11 +215,11 @@ public class ReevoPlayerServiceAdaptor
             }
         }
 
-        private GetBalanceResponse getForBalanceResponse(String fullUrl) {
+        private GetBalanceResponse getForBalanceResponse(String path) {
             try {
                 String out = restClient
                         .get()
-                        .uri(fullUrl)
+                        .uri(path)
                         .accept(MediaType.APPLICATION_JSON)
                         .retrieve()
                         .body(String.class);
@@ -239,7 +244,7 @@ public class ReevoPlayerServiceAdaptor
             }
         }
 
-        private String buildSignedUrl(Map<String, String> requestMap) {
+        private String buildSignedQueryString(Map<String, String> requestMap) {
             String queryString;
             String key;
             try {
@@ -249,9 +254,7 @@ public class ReevoPlayerServiceAdaptor
                 throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, "Invalid request", e);
             }
 
-            String base = getBaseUrl();
-            String sep = base.contains("?") ? "&" : "?";
-            return base + sep + queryString + "&key=" + key;
+            return queryString + "&key=" + key;
         }
 
         @Override
@@ -268,12 +271,12 @@ public class ReevoPlayerServiceAdaptor
             requestMap.put("session_id", request.getSessionToken());
             requestMap.put("gamesession_id", request.getSessionToken());
 
-            String url = buildSignedUrl(requestMap);
+            String path = buildSignedQueryString(requestMap);
 
             GetBalanceResponse balanceResponse = executeWithRetry(
                     "balance",
                     false,
-                    () -> getForBalanceResponse(url));
+                    () -> getForBalanceResponse(path));
 
             try {
                 if (balanceResponse.status != 200) {
@@ -489,7 +492,7 @@ public class ReevoPlayerServiceAdaptor
             requestMap.put("is_freeround_bet", "0");
             requestMap.put("jackpot_contribution_in_amount", "0");
 
-            String url = buildSignedUrl(requestMap);
+            String path = buildSignedQueryString(requestMap);
             long startMillis = System.currentTimeMillis();
 
             boolean retryAllThrowables = (type == TransactionType.CREDIT || type == TransactionType.ROLLBACK);
@@ -500,7 +503,7 @@ public class ReevoPlayerServiceAdaptor
                         retryAllThrowables,
                         () -> {
                             try {
-                                GetBalanceResponse r = getForBalanceResponse(url);
+                                GetBalanceResponse r = getForBalanceResponse(path);
                                 if (type == TransactionType.DEBIT) {
                                     if (r.status == 403) {
                                         throw new BaseRuntimeException(SystemErrorCode.GENERAL_API_ERROR, r.msg);

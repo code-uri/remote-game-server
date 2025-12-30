@@ -1,0 +1,230 @@
+# ==============================================================================
+# Kubernetes Pod Environment Variables for HTTP Logging
+# ==============================================================================
+# Spring Boot property binding for environment variables uses UPPERCASE with
+# underscores instead of dots
+# ==============================================================================
+
+# ❌ WRONG - These DON'T work as environment variables:
+# - name: "logging.level.org.springframework.web.client.RestClient"
+#   value: "DEBUG"
+
+# ✅ CORRECT - Use uppercase with underscores:
+- name: "LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_CLIENT_RESTCLIENT"
+  value: "DEBUG"
+
+# ------------------------------------------------------------------------------
+# Complete Configuration for HTTP Request/Response Logging
+# ------------------------------------------------------------------------------
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rgs-logging-config
+data:
+  # ============================================================================
+  # INCOMING HTTP REQUESTS (Server-side)
+  # ============================================================================
+
+  # Basic request/response logging
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_DISPATCHERSERVLET: "DEBUG"
+
+  # Request mapping details
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_MVC_METHOD_ANNOTATION_REQUESTMAPPINGHANDLERmapping: "DEBUG"
+
+  # ============================================================================
+  # OUTGOING HTTP REQUESTS (RestClient)
+  # ============================================================================
+
+  # RestClient request/response logging
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_CLIENT_RESTCLIENT: "DEBUG"
+
+  # HTTP client observation (Spring Boot 3.x)
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_HTTP_CLIENT_OBSERVATION: "DEBUG"
+
+  # ============================================================================
+  # JDK HTTP CLIENT (Wire-level logging)
+  # ============================================================================
+  # RestClient in Spring Boot 3.x uses JDK HttpClient by default, NOT Apache HttpClient
+
+  # JDK HttpClient uses java.util.logging (JUL), need to enable via system property
+  # Add to JVM args in your Dockerfile or deployment:
+  # JAVA_OPTS: "-Djdk.httpclient.HttpClient.log=all"
+
+  # OR route JUL to SLF4J (better approach):
+  LOGGING_LEVEL_JDK_HTTPCLIENT_HTTPCLIENT: "DEBUG"
+
+  # ============================================================================
+  # APACHE HTTP CLIENT (Only if explicitly configured)
+  # ============================================================================
+  # These only work if you configure RestClient to use Apache HttpClient
+  # (Not the default in Spring Boot 3.x)
+
+  #LOGGING_LEVEL_ORG_APACHE_HTTP_WIRE: "DEBUG"
+  #LOGGING_LEVEL_ORG_APACHE_HTTP_HEADERS: "DEBUG"
+
+  # ============================================================================
+  # REACTIVE HTTP (WebClient/Netty) - If using
+  # ============================================================================
+
+  LOGGING_LEVEL_REACTOR_NETTY_HTTP_CLIENT: "DEBUG"
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_REACTIVE_FUNCTION_CLIENT_EXCHANGEFUNCTIONS: "DEBUG"
+
+  # ============================================================================
+  # SECURITY LOGGING
+  # ============================================================================
+
+  #LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: "DEBUG"
+
+  # ============================================================================
+  # TRACE/SPAN LOGGING
+  # ============================================================================
+
+  # Micrometer tracing
+  LOGGING_LEVEL_IO_MICROMETER_TRACING: "DEBUG"
+
+  # ============================================================================
+  # APPLICATION-SPECIFIC
+  # ============================================================================
+
+  # Your application package
+  LOGGING_LEVEL_AIMLABS_GAMING_RGS: "DEBUG"
+
+---
+# ==============================================================================
+# Deployment Configuration
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rgs-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: rgs-server
+        image: your-registry/rgs-server:latest
+
+        # ----------------------------------------------------------------------
+        # Option 1: Use ConfigMap
+        # ----------------------------------------------------------------------
+        envFrom:
+        - configMapRef:
+            name: rgs-logging-config
+
+        # ----------------------------------------------------------------------
+        # Option 2: Direct environment variables
+        # ----------------------------------------------------------------------
+        env:
+        # RestClient request/response logging
+        - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_CLIENT_RESTCLIENT
+          value: "DEBUG"
+
+        # HTTP client observation
+        - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_HTTP_CLIENT_OBSERVATION
+          value: "DEBUG"
+
+        # JDK HttpClient wire logging (requires JUL->SLF4J bridge)
+        - name: LOGGING_LEVEL_JDK_HTTPCLIENT_HTTPCLIENT
+          value: "DEBUG"
+
+        # Enable JDK HttpClient detailed logging
+        - name: JAVA_TOOL_OPTIONS
+          value: "-Djdk.httpclient.HttpClient.log=all -Djava.util.logging.manager=org.slf4j.bridge.SLF4JBridgeHandler"
+
+        # Application logging
+        - name: LOGGING_LEVEL_AIMLABS_GAMING_RGS
+          value: "DEBUG"
+
+        # Trace/tenant logging
+        - name: LOGGING_PATTERN_CONSOLE
+          value: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-},%X{spanId:-},%X{tenant}] %logger{36} - %msg%n"
+
+---
+# ==============================================================================
+# Alternative: Using application-k8s.properties in ConfigMap
+# ==============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rgs-application-config
+data:
+  application-k8s.properties: |
+    # HTTP Logging
+    logging.level.org.springframework.web.client.RestClient=DEBUG
+    logging.level.org.springframework.http.client.observation=DEBUG
+    logging.level.jdk.httpclient.HttpClient=DEBUG
+    
+    # Your app
+    logging.level.aimlabs.gaming.rgs=DEBUG
+    
+    # Pattern
+    logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-},%X{spanId:-},%X{tenant}] %logger{36} - %msg%n
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rgs-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: rgs-server
+        image: your-registry/rgs-server:latest
+
+        # Mount ConfigMap as properties file
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "k8s"
+        - name: SPRING_CONFIG_ADDITIONAL_LOCATION
+          value: "file:/config/"
+
+      volumes:
+      - name: config
+        configMap:
+          name: rgs-application-config
+
+---
+# ==============================================================================
+# IMPORTANT NOTES
+# ==============================================================================
+
+# 1. JDK HttpClient Wire Logging:
+#    - Spring Boot 3.x uses JDK HttpClient by default (not Apache HttpClient)
+#    - JDK HttpClient uses java.util.logging (JUL), not SLF4J
+#    - Need SLF4JBridgeHandler to route JUL logs to Logback
+#
+#    Add to build.gradle:
+#    implementation 'org.slf4j:jul-to-slf4j'
+#
+#    Add to application startup (or JAVA_TOOL_OPTIONS):
+#    -Djava.util.logging.manager=org.slf4j.bridge.SLF4JBridgeHandler
+
+# 2. Environment Variable Naming:
+#    - Dots (.) become underscores (_)
+#    - Lowercase becomes UPPERCASE
+#    - Example: logging.level.foo.bar -> LOGGING_LEVEL_FOO_BAR
+
+# 3. RestClient vs RestTemplate:
+#    - RestClient (Spring 6+): Uses JDK HttpClient by default
+#    - RestTemplate (legacy): Uses Apache HttpClient or similar
+#    - Check which one you're using!
+
+# 4. Performance Impact:
+#    - DEBUG logging has minimal overhead
+#    - Wire logging (all bytes) can be expensive
+#    - Use conditionally or with sampling in production
+
+# 5. Verification:
+#    - Check logs contain: "RestClient - Request:"
+#    - If not, check: kubectl logs <pod> | grep RestClient
+#    - Enable actuator and check: curl /actuator/loggers
+

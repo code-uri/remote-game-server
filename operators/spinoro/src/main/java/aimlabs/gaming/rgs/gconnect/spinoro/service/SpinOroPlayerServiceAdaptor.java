@@ -57,7 +57,7 @@ public class SpinOroPlayerServiceAdaptor
     private ObjectMapper objectMapper;
 
     @Autowired
-    private RestClient restClient;
+    private RestClient.Builder restClientBuilder;
 
     public boolean supports(Connector connector) {
         return connectorUid.equals(connector.getUid())
@@ -72,37 +72,11 @@ public class SpinOroPlayerServiceAdaptor
     class SprinOroPlayerServiceConnector implements PlayerAccountManager {
 
         private final Connector connector;
+        private final RestClient restClient;
 
         SprinOroPlayerServiceConnector(Connector connector) {
             this.connector = connector;
-        }
-
-        private String getSettingAsString(String key) {
-            Object v = connector != null && connector.getSettings() != null ? connector.getSettings().get(key) : null;
-            return v != null ? v.toString() : null;
-        }
-
-        private String getBaseUrl() {
-            String v = connector != null ? connector.getBaseUrl() : null;
-            if (v == null || v.isBlank()) {
-                v = getSettingAsString("baseUrl");
-            }
-            if (v == null || v.isBlank()) {
-                throw new BaseRuntimeException(SystemErrorCode.COM_ERROR, "Missing spinoro baseUrl");
-            }
-            return v;
-        }
-
-        private String buildUrl(String path) {
-            String root = getBaseUrl();
-            if (root.endsWith("/")) {
-                root = root.substring(0, root.length() - 1);
-            }
-            String p = (path == null || path.isBlank()) ? "/" : path;
-            if (!p.startsWith("/")) {
-                p = "/" + p;
-            }
-            return root + p;
+            this.restClient = restClientBuilder.baseUrl(connector.getBaseUrl()).build();
         }
 
         private int getMaxRetries() {
@@ -154,11 +128,10 @@ public class SpinOroPlayerServiceAdaptor
         }
 
         private <TReq, TRes> TRes postForObject(String path, TReq body, Class<TRes> responseType) {
-            String url = buildUrl(path);
             try {
                 String response = restClient
                         .post()
-                        .uri(url)
+                        .uri(path)
                         .contentType(MediaType.APPLICATION_JSON)
                         .accept(MediaType.APPLICATION_JSON)
                         .body(body)
