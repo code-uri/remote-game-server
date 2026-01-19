@@ -1,0 +1,7 @@
+subprojects {
+    tasks.withType(JavaCompile).configureEach {
+        if (!options.compilerArgs.contains('-parameters')) {
+            options.compilerArgs.add('-parameters')
+        }
+    }
+}

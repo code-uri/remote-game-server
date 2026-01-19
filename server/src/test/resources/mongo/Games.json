@@ -29,6 +29,7 @@
     "deleted": false,
     "tenant": "default",
     "gameConfiguration": "hydrogen",
+    "connector": "photon-connector",
     "gameType": "SLOTS"
   }
 ]
